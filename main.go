@@ -28,6 +28,12 @@ func runApp(c *cli.Context) error {
 	client := github.GetGithubClient(token)
 	ctx := context.Background()
 
+	if token != "" {
+		if err := github.ValidateToken(ctx, client); err != nil {
+			return fmt.Errorf("token validation failed: %v", err)
+		}
+	}
+
 	username := input
 	if strings.Contains(input, "@") {
 		color.Blue("Looking up GitHub user for email: %s", input)
@@ -52,10 +58,16 @@ func runApp(c *cli.Context) error {
 
 	repos, err := github.FetchRepos(ctx, client, username)
 	if err != nil {
+		if strings.Contains(err.Error(), "rate limit") {
+			return fmt.Errorf("GitHub API rate limit exceeded. Try using a token with: gitslurp -t <token> %s", username)
+		}
 		return fmt.Errorf("error fetching repositories: %v", err)
 	}
 
 	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks)
+	if len(emails) == 0 {
+		return fmt.Errorf("no commits found for user: %s", username)
+	}
 	displayResults(emails, showDetails, checkSecrets, showLinks, token)
 	return nil
 }

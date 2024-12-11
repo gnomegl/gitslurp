@@ -38,7 +38,6 @@ func GetToken(c *cli.Context) string {
 		if data, err := os.ReadFile(tokenFile); err == nil {
 			token = strings.TrimSpace(string(data))
 			if token != "" {
-				color.Green("Using saved token from config file")
 				return token
 			}
 		}
@@ -107,4 +106,16 @@ func UserExists(ctx context.Context, client *github.Client, username string) (bo
 		return false, err
 	}
 	return true, nil
+}
+
+func ValidateToken(ctx context.Context, client *github.Client) error {
+	// Try to fetch authenticated user info to validate token
+	_, resp, err := client.Users.Get(ctx, "")
+	if err != nil {
+		if resp != nil && resp.StatusCode == 401 {
+			return fmt.Errorf("invalid GitHub token")
+		}
+		return fmt.Errorf("error validating token: %v", err)
+	}
+	return nil
 }
