@@ -3,7 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -127,7 +127,7 @@ func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Re
 
 			commits, err := FetchCommits(ctx, client, repo.GetOwner().GetLogin(), repo.GetName(), repo.GetFork(), since, checkSecrets, findLinks)
 			if err != nil {
-				log.Printf("Error fetching commits for %s: %v", repo.GetName(), err)
+				fmt.Fprintf(os.Stderr, "Error fetching commits for %s: %v\n", repo.GetName(), err)
 				return
 			}
 
