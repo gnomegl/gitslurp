@@ -77,3 +77,23 @@ func GetToken(c *cli.Context) string {
 
 	return token
 }
+
+func GetUsernameForEmail(ctx context.Context, client *github.Client, email string) (string, error) {
+	searchQuery := fmt.Sprintf("in:email %s", email)
+	opts := &github.SearchOptions{
+		ListOptions: github.ListOptions{
+			PerPage: 1,
+		},
+	}
+
+	result, _, err := client.Search.Users(ctx, searchQuery, opts)
+	if err != nil {
+		return "", fmt.Errorf("error searching for user: %v", err)
+	}
+
+	if len(result.Users) == 0 {
+		return "", nil
+	}
+
+	return result.Users[0].GetLogin(), nil
+}
