@@ -19,7 +19,7 @@ func runApp(c *cli.Context) error {
 		return cli.ShowAppHelp(c)
 	}
 
-	username := c.Args().First()
+	input := c.Args().First()
 	token := github.GetToken(c)
 	showDetails := c.Bool("details")
 	checkSecrets := c.Bool("secrets")
@@ -28,18 +28,31 @@ func runApp(c *cli.Context) error {
 	client := github.GetGithubClient(token)
 	ctx := context.Background()
 
-	color.Blue("Fetching public repositories for user: %s", username)
+	username := input
+	if strings.Contains(input, "@") {
+		color.Blue("Looking up GitHub user for email: %s", input)
+		var err error
+		username, err = github.GetUsernameForEmail(ctx, client, input)
+		if err != nil {
+			return err
+		}
+		if username == "" {
+			return fmt.Errorf("no GitHub user found for email: %s\nThe user has either made their email private or does not have any commits", input)
+		}
+	}
+
+	color.Blue("Fetching public repositories for user: %s (from %s)", username, input)
 	repos, err := github.FetchRepos(ctx, client, username)
 	if err != nil {
 		return fmt.Errorf("error fetching repositories: %v", err)
 	}
 
 	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks)
-	displayResults(emails, showDetails, checkSecrets, showLinks)
+	displayResults(emails, showDetails, checkSecrets, showLinks, token)
 	return nil
 }
 
-func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool) {
+func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string) {
 	type emailEntry struct {
 		Email   string
 		Details *models.EmailDetails
@@ -54,9 +67,27 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 		return sortedEmails[i].Details.CommitCount > sortedEmails[j].Details.CommitCount
 	})
 
+	client := github.GetGithubClient(token)
+	ctx := context.Background()
+
+	for _, entry := range sortedEmails {
+		username, err := github.GetUsernameForEmail(ctx, client, entry.Email)
+		if err != nil {
+			log.Printf("Warning: error looking up email %s: %v", entry.Email, err)
+			continue
+		}
+		if username != "" {
+			entry.Details.IsUserEmail = true
+			entry.Details.GithubUsername = username
+		}
+	}
+
 	fmt.Println("\nCollected author information:")
 	for _, entry := range sortedEmails {
 		color.Yellow(entry.Email)
+		if entry.Details.IsUserEmail {
+			color.Green("  ✓ GitHub user: %s", entry.Details.GithubUsername)
+		}
 
 		if showDetails || checkSecrets || showLinks {
 			for repoName, commits := range entry.Details.Commits {
@@ -73,6 +104,9 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 					color.Magenta("    Commit: %s", commit.Hash)
 					color.Blue("    URL: %s", commit.URL)
 					color.White("    Author: %s", commit.AuthorName)
+					if commit.IsOwnRepo {
+						color.Cyan("    Owner: true")
+					}
 					if commit.IsFork {
 						color.Cyan("    Fork: true")
 					}
@@ -106,7 +140,7 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 func main() {
 	app := &cli.App{
 		Name:  "gitslurp",
-		Usage: "Analyze GitHub user's commit history across repositories",
+		Usage: "Analyze GitHub user's commit history across repositories. Accepts username or email address.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "details",
@@ -133,7 +167,7 @@ func main() {
 		Action: runApp,
 		Authors: []*cli.Author{
 			{
-				Name: "GitSlurp Team",
+				Name: "gnomegl",
 			},
 		},
 		Version: "1.0.0",
