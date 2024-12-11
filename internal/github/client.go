@@ -97,3 +97,14 @@ func GetUsernameForEmail(ctx context.Context, client *github.Client, email strin
 
 	return result.Users[0].GetLogin(), nil
 }
+
+func UserExists(ctx context.Context, client *github.Client, username string) (bool, error) {
+	_, resp, err := client.Users.Get(ctx, username)
+	if err != nil {
+		if resp != nil && resp.StatusCode == 404 {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
