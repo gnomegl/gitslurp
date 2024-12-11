@@ -48,6 +48,13 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 	for {
 		commits, resp, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
 		if err != nil {
+			if resp != nil && resp.StatusCode == 409 {
+				// Repository is empty or in an invalid state
+				return nil, fmt.Errorf("repository is empty or not accessible")
+			}
+			if resp != nil && resp.StatusCode == 404 {
+				return nil, fmt.Errorf("repository not found or access denied")
+			}
 			return nil, fmt.Errorf("error fetching commits: %v", err)
 		}
 
