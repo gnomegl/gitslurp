@@ -13,10 +13,13 @@ type CommitInfo struct {
 	IsFork      bool
 	Secrets     []string
 	Links       []string
+	IsOwnRepo   bool
 }
 
 type EmailDetails struct {
-	Names       map[string]struct{}
-	Commits     map[string][]CommitInfo
-	CommitCount int
+	Names          map[string]struct{}
+	Commits        map[string][]CommitInfo
+	CommitCount    int
+	IsUserEmail    bool
+	GithubUsername string
 }
