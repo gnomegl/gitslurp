@@ -158,6 +158,9 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 }
 
 func main() {
+	// Configure logger to only show the message
+	log.SetFlags(0)
+
 	app := &cli.App{
 		Name:  "gitslurp",
 		Usage: "Analyze GitHub user's commit history across repositories. Accepts username or email address.",
