@@ -34,6 +34,10 @@ func runApp(c *cli.Context) error {
 	showDetails := c.Bool("details")
 	checkSecrets := c.Bool("secrets")
 	showLinks := c.Bool("links")
+	showTargetOnly := true
+	if c.Bool("all") {
+		showTargetOnly = false
+	}
 
 	client := github.GetGithubClient(token)
 	ctx := context.Background()
@@ -89,11 +93,15 @@ func runApp(c *cli.Context) error {
 	}
 
 	// Pass the user's information for highlighting
-	displayResults(emails, showDetails, checkSecrets, showLinks, token, lookupEmail, username, user)
+	displayResults(emails, showDetails, checkSecrets, showLinks, token, lookupEmail, username, user, showTargetOnly)
 	return nil
 }
 
-func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string, lookupEmail string, knownUsername string, user *gh.User) {
+func isUserIdentifier(identifier string, userIdentifiers map[string]bool) bool {
+	return userIdentifiers[identifier]
+}
+
+func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool) {
 	type emailEntry struct {
 		Email   string
 		Details *models.EmailDetails
@@ -109,36 +117,40 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 	})
 
 	// Create a set of the user's known identifiers
-	userIdentifiers := make(map[string]bool)
+	userIdentifiers := map[string]bool{
+		knownUsername: true,
+		lookupEmail:   true,
+	}
 	if user != nil {
 		userIdentifiers[user.GetLogin()] = true
 		userIdentifiers[user.GetName()] = true
 		userIdentifiers[user.GetEmail()] = true
-		// Add public email if available
-		if email := user.GetEmail(); email != "" {
-			userIdentifiers[email] = true
-		}
 	}
-	userIdentifiers[knownUsername] = true
-	if lookupEmail != "" {
-		userIdentifiers[lookupEmail] = true
-	}
+
+	totalCommits := 0
+	totalContributors := 0
 
 	fmt.Println("\nCollected author information:")
 	for _, entry := range sortedEmails {
-		// Check if this email belongs to the target user
-		isTargetUser := userIdentifiers[entry.Email]
+		// Check if this email or any associated names belong to target user
+		isTargetUser := isUserIdentifier(entry.Email, userIdentifiers)
 		if !isTargetUser {
-			// Also check if any of the author names match
 			for name := range entry.Details.Names {
-				if userIdentifiers[name] {
+				if isUserIdentifier(name, userIdentifiers) {
 					isTargetUser = true
 					break
 				}
 			}
 		}
 
+		if showTargetOnly && !isTargetUser {
+			continue
+		}
+
+		totalContributors++
+
 		if isTargetUser {
+			totalCommits += entry.Details.CommitCount
 			color.HiYellow("📍 %s (Target User)", entry.Email)
 			names := make([]string, 0, len(entry.Details.Names))
 			for name := range entry.Details.Names {
@@ -173,7 +185,7 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 						continue
 					}
 
-					isTargetCommit := isTargetUser || userIdentifiers[commit.AuthorName] || userIdentifiers[commit.AuthorEmail]
+					isTargetCommit := isTargetUser || isUserIdentifier(commit.AuthorName, userIdentifiers) || isUserIdentifier(commit.AuthorEmail, userIdentifiers)
 
 					if isTargetCommit {
 						color.HiMagenta("    ⭐ Commit: %s", commit.Hash)
@@ -223,6 +235,12 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			}
 		}
 	}
+
+	if showTargetOnly {
+		color.HiCyan("\nTotal commits by target user: %d", totalCommits)
+	} else {
+		color.HiCyan("\nTotal contributors: %d", totalContributors)
+	}
 }
 
 func main() {
@@ -233,7 +251,7 @@ func main() {
 	app := &cli.App{
 		Name:    "gitslurp",
 		Usage:   "OSINT tool to analyze GitHub user's commit history across repositories",
-		Version: "1.0.0",
+		Version: "1.0.1",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "token",
@@ -255,6 +273,11 @@ func main() {
 				Name:    "links",
 				Aliases: []string{"l"},
 				Usage:   "Show URLs found in commit messages",
+			},
+			&cli.BoolFlag{
+				Name:    "all",
+				Aliases: []string{"a"},
+				Usage:   "Show commits from all contributors",
 			},
 		},
 		Action: runApp,
