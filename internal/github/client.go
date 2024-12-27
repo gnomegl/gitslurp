@@ -97,6 +97,26 @@ func GetUsernameForEmail(ctx context.Context, client *github.Client, email strin
 	return result.Users[0].GetLogin(), nil
 }
 
+func GetUserByEmail(ctx context.Context, client *github.Client, email string) (*github.User, error) {
+	searchQuery := fmt.Sprintf("in:email %s", email)
+	opts := &github.SearchOptions{
+		ListOptions: github.ListOptions{
+			PerPage: 1,
+		},
+	}
+
+	result, _, err := client.Search.Users(ctx, searchQuery, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for user: %w", err)
+	}
+
+	if len(result.Users) == 0 {
+		return nil, nil
+	}
+
+	return result.Users[0], nil
+}
+
 func UserExists(ctx context.Context, client *github.Client, username string) (bool, error) {
 	_, resp, err := client.Users.Get(ctx, username)
 	if err != nil {
