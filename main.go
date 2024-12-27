@@ -296,7 +296,7 @@ func main() {
 	app := &cli.App{
 		Name:    "gitslurp",
 		Usage:   "OSINT tool to analyze GitHub user's commit history across repositories",
-		Version: "1.0.1",
+		Version: currentVersion,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "token",
