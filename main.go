@@ -109,7 +109,7 @@ func runApp(c *cli.Context) error {
 		}
 	}
 
-	color.Blue("Fetching public repositories for user: %s (from %s)", username, input)
+	color.Blue("Fetching public repositories for user: %s", username, input)
 	exists, err := github.UserExists(ctx, client, username)
 	if err != nil {
 		return fmt.Errorf("error checking if user exists: %v", err)
