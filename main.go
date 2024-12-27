@@ -24,7 +24,34 @@ Options:
    {{range .VisibleFlags}}{{.}}
    {{end}}`
 
+const (
+	currentVersion = "1.0.2"
+	repoOwner      = "gnomegl"
+	repoName       = "gitslurp"
+)
+
+func checkLatestVersion(ctx context.Context, client *gh.Client) {
+	release, _, err := client.Repositories.GetLatestRelease(ctx, repoOwner, repoName)
+	if err != nil {
+		return // Silently fail version check
+	}
+
+	latestVersion := strings.TrimPrefix(release.GetTagName(), "v")
+	if latestVersion != currentVersion {
+		color.Yellow("⚠️  A new version of gitslurp is available: %s (you're running %s)",
+			latestVersion, currentVersion)
+		color.Yellow("   Update at: https://github.com/%s/%s/releases/latest",
+			repoOwner, repoName)
+		fmt.Println()
+	}
+}
+
 func runApp(c *cli.Context) error {
+	// Check for new version first
+	token := github.GetToken(c)
+	client := github.GetGithubClient(token)
+	checkLatestVersion(context.Background(), client)
+
 	// Check if flags appear after arguments
 	args := c.Args().Slice()
 	if len(args) > 0 {
@@ -35,7 +62,7 @@ func runApp(c *cli.Context) error {
 				break
 			}
 		}
-		
+
 		if firstArgIndex > 0 {
 			// Check if there are any flags after the first non-flag argument
 			for _, arg := range os.Args[firstArgIndex+1:] {
@@ -51,7 +78,6 @@ func runApp(c *cli.Context) error {
 	}
 
 	input := c.Args().First()
-	token := github.GetToken(c)
 	showDetails := c.Bool("details")
 	checkSecrets := c.Bool("secrets")
 	showLinks := c.Bool("links")
@@ -60,7 +86,6 @@ func runApp(c *cli.Context) error {
 		showTargetOnly = false
 	}
 
-	client := github.GetGithubClient(token)
 	ctx := context.Background()
 
 	if token != "" {
@@ -94,8 +119,7 @@ func runApp(c *cli.Context) error {
 	}
 
 	// Get the user's information to match against commits
-	ghClient := github.GetGithubClient(token)
-	user, _, err := ghClient.Users.Get(ctx, username)
+	user, _, err := client.Users.Get(ctx, username)
 	if err != nil {
 		return fmt.Errorf("error fetching user details: %v", err)
 	}
@@ -298,7 +322,7 @@ func main() {
 			&cli.BoolFlag{
 				Name:    "all",
 				Aliases: []string{"a"},
-				Usage:   "Show commits from all contributors in the target's repositories.\n\tUseful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities",
+				Usage:   "Show commits from all contributors in the target's repositories",
 			},
 		},
 		Action: runApp,
