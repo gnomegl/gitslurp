@@ -3,10 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/gnomegl/gitslurp)](https://goreportcard.com/report/github.com/gnomegl/gitslurp)
 [![GoDoc](https://godoc.org/github.com/gnomegl/gitslurp?status.svg)](https://godoc.org/github.com/gnomegl/gitslurp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/gnomegl/gitslurp)](https://github.com/gnomegl/gitslurp/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/gnomegl/gitslurp)](https://golang.org/doc/devel/release.html)
-[![Build Status](https://github.com/gnomegl/gitslurp/workflows/build/badge.svg)](https://github.com/gnomegl/gitslurp/actions)
-[![codecov](https://codecov.io/gh/gnomegl/gitslurp/branch/main/graph/badge.svg)](https://codecov.io/gh/gnomegl/gitslurp)
 
 <div align="center">
   <img src="docs/assets/logo.png" alt="gitslurp logo" width="300">
