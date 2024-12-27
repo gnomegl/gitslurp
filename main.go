@@ -47,10 +47,11 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 }
 
 func runApp(c *cli.Context) error {
-	// Check for new version first
 	token := github.GetToken(c)
 	client := github.GetGithubClient(token)
 	checkLatestVersion(context.Background(), client)
+
+	cfg := github.DefaultConfig()
 
 	// Check if flags appear after arguments
 	args := c.Args().Slice()
@@ -98,46 +99,51 @@ func runApp(c *cli.Context) error {
 	var lookupEmail string
 	if strings.Contains(input, "@") {
 		lookupEmail = input
-		color.Blue("Looking up GitHub user for email: %s", input)
-		var err error
-		username, err = github.GetUsernameForEmail(ctx, client, input)
+		color.Blue("\nLooking up GitHub user for email: %s", input)
+
+		user, err := github.GetUserByEmail(ctx, client, input)
 		if err != nil {
-			return err
+			color.Red("❌ Error: %v", err)
+			return nil
 		}
-		if username == "" {
-			return fmt.Errorf("no GitHub user found for email: %s\nThe user has either made their email private or does not have any commits", input)
+
+		if user == nil {
+			color.Red("❌ No GitHub user found for email: %s", input)
+			return nil
+		}
+
+		username = user.GetLogin()
+		color.Green("✓ Found GitHub user: %s", username)
+	} else {
+		color.Blue("\nTarget user: %s", username)
+	}
+	fmt.Println()
+
+	repos, err := github.FetchRepos(ctx, client, username, cfg)
+	if err != nil {
+		color.Red("❌ Error: %v", err)
+		return nil
+	}
+
+	if len(repos) == 0 {
+		color.Red("❌ No public repositories found for user: %s", username)
+		return nil
+	}
+
+	var user *gh.User
+	if lookupEmail == "" {
+		user, _, err = client.Users.Get(ctx, username)
+		if err != nil {
+			color.Red("❌ Error fetching user details: %v", err)
+			return nil
 		}
 	}
 
-	color.Blue("Fetching public repositories for user: %s", username, input)
-	exists, err := github.UserExists(ctx, client, username)
-	if err != nil {
-		return fmt.Errorf("error checking if user exists: %v", err)
-	}
-	if !exists {
-		return fmt.Errorf("GitHub user '%s' not found", username)
-	}
-
-	// Get the user's information to match against commits
-	user, _, err := client.Users.Get(ctx, username)
-	if err != nil {
-		return fmt.Errorf("error fetching user details: %v", err)
-	}
-
-	repos, err := github.FetchRepos(ctx, client, username)
-	if err != nil {
-		if strings.Contains(err.Error(), "rate limit") {
-			return fmt.Errorf("GitHub API rate limit exceeded. Try using a token with: gitslurp -t <token> %s", username)
-		}
-		return fmt.Errorf("error fetching repositories: %v", err)
-	}
-
-	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks)
+	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks, cfg)
 	if len(emails) == 0 {
 		return fmt.Errorf("no commits found for user: %s", username)
 	}
 
-	// Pass the user's information for highlighting
 	displayResults(emails, showDetails, checkSecrets, showLinks, token, lookupEmail, username, user, showTargetOnly)
 	return nil
 }
