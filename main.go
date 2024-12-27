@@ -25,6 +25,27 @@ Options:
    {{end}}`
 
 func runApp(c *cli.Context) error {
+	// Check if flags appear after arguments
+	args := c.Args().Slice()
+	if len(args) > 0 {
+		firstArgIndex := -1
+		for i, arg := range os.Args[1:] {
+			if !strings.HasPrefix(arg, "-") {
+				firstArgIndex = i + 1
+				break
+			}
+		}
+		
+		if firstArgIndex > 0 {
+			// Check if there are any flags after the first non-flag argument
+			for _, arg := range os.Args[firstArgIndex+1:] {
+				if strings.HasPrefix(arg, "-") {
+					return cli.ShowAppHelp(c)
+				}
+			}
+		}
+	}
+
 	if c.NArg() < 1 {
 		return cli.ShowAppHelp(c)
 	}
