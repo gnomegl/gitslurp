@@ -62,11 +62,11 @@ gitslurp -t <github_token> <username>
 
 ### Options
 
-- `-t, --token`: GitHub personal access token
-- `-d, --details`: Show detailed commit information
-- `-s, --secrets`: Enable secret detection in commits
-- `-l, --links`: Show URLs found in commit messages
-- `-a, --all`: Show commits from all contributors in the target's repositories. Useful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities
+- `--token, -t`: GitHub personal access token (can also be set via `GITHUB_TOKEN` environment variable)
+- `--details, -d`: Show detailed commit information
+- `--secrets, -s`: Enable secret detection in commits
+- `--links, -l`: Show URLs found in commit messages
+- `--all, -a`: Show commits from all contributors in the target's repositories. This is useful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities
 
 ## Output Format
 
