@@ -9,10 +9,20 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/gnomegl/gitslurp/internal/art"
 	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/models"
+	gh "github.com/google/go-github/v57/github"
 	"github.com/urfave/cli/v2"
 )
+
+const helpTemplate = `{{.Name}} - {{.Usage}}
+
+Usage: {{.HelpName}} [options] <username|email>
+
+Options:
+   {{range .VisibleFlags}}{{.}}
+   {{end}}`
 
 func runApp(c *cli.Context) error {
 	if c.NArg() < 1 {
@@ -35,7 +45,9 @@ func runApp(c *cli.Context) error {
 	}
 
 	username := input
+	var lookupEmail string
 	if strings.Contains(input, "@") {
+		lookupEmail = input
 		color.Blue("Looking up GitHub user for email: %s", input)
 		var err error
 		username, err = github.GetUsernameForEmail(ctx, client, input)
@@ -56,6 +68,13 @@ func runApp(c *cli.Context) error {
 		return fmt.Errorf("GitHub user '%s' not found", username)
 	}
 
+	// Get the user's information to match against commits
+	ghClient := github.GetGithubClient(token)
+	user, _, err := ghClient.Users.Get(ctx, username)
+	if err != nil {
+		return fmt.Errorf("error fetching user details: %v", err)
+	}
+
 	repos, err := github.FetchRepos(ctx, client, username)
 	if err != nil {
 		if strings.Contains(err.Error(), "rate limit") {
@@ -68,11 +87,13 @@ func runApp(c *cli.Context) error {
 	if len(emails) == 0 {
 		return fmt.Errorf("no commits found for user: %s", username)
 	}
-	displayResults(emails, showDetails, checkSecrets, showLinks, token)
+
+	// Pass the user's information for highlighting
+	displayResults(emails, showDetails, checkSecrets, showLinks, token, lookupEmail, username, user)
 	return nil
 }
 
-func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string) {
+func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string, lookupEmail string, knownUsername string, user *gh.User) {
 	type emailEntry struct {
 		Email   string
 		Details *models.EmailDetails
@@ -87,31 +108,62 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 		return sortedEmails[i].Details.CommitCount > sortedEmails[j].Details.CommitCount
 	})
 
-	client := github.GetGithubClient(token)
-	ctx := context.Background()
-
-	for _, entry := range sortedEmails {
-		username, err := github.GetUsernameForEmail(ctx, client, entry.Email)
-		if err != nil {
-			log.Printf("Warning: error looking up email %s: %v", entry.Email, err)
-			continue
+	// Create a set of the user's known identifiers
+	userIdentifiers := make(map[string]bool)
+	if user != nil {
+		userIdentifiers[user.GetLogin()] = true
+		userIdentifiers[user.GetName()] = true
+		userIdentifiers[user.GetEmail()] = true
+		// Add public email if available
+		if email := user.GetEmail(); email != "" {
+			userIdentifiers[email] = true
 		}
-		if username != "" {
-			entry.Details.IsUserEmail = true
-			entry.Details.GithubUsername = username
-		}
+	}
+	userIdentifiers[knownUsername] = true
+	if lookupEmail != "" {
+		userIdentifiers[lookupEmail] = true
 	}
 
 	fmt.Println("\nCollected author information:")
 	for _, entry := range sortedEmails {
-		color.Yellow(entry.Email)
-		if entry.Details.IsUserEmail {
-			color.Green("  ✓ GitHub user: %s", entry.Details.GithubUsername)
+		// Check if this email belongs to the target user
+		isTargetUser := userIdentifiers[entry.Email]
+		if !isTargetUser {
+			// Also check if any of the author names match
+			for name := range entry.Details.Names {
+				if userIdentifiers[name] {
+					isTargetUser = true
+					break
+				}
+			}
+		}
+
+		if isTargetUser {
+			color.HiYellow("📍 %s (Target User)", entry.Email)
+			names := make([]string, 0, len(entry.Details.Names))
+			for name := range entry.Details.Names {
+				names = append(names, name)
+			}
+			color.HiGreen("  ✓ Names used: %s", strings.Join(names, ", "))
+			color.HiGreen("  ✓ Total Commits: %d", entry.Details.CommitCount)
+		} else {
+			color.Yellow(entry.Email)
+			names := make([]string, 0, len(entry.Details.Names))
+			for name := range entry.Details.Names {
+				names = append(names, name)
+			}
+			color.White("  Names: %s", strings.Join(names, ", "))
+			color.White("  Total Commits: %d", entry.Details.CommitCount)
 		}
 
 		if showDetails || checkSecrets || showLinks {
 			for repoName, commits := range entry.Details.Commits {
-				color.Green("  Repo: %s", repoName)
+				if isTargetUser {
+					color.HiGreen("  📂 Repo: %s", repoName)
+				} else {
+					color.Green("  Repo: %s", repoName)
+				}
+
 				for _, commit := range commits {
 					shouldShowCommit := showDetails ||
 						(checkSecrets && len(commit.Secrets) > 0) ||
@@ -121,9 +173,18 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 						continue
 					}
 
-					color.Magenta("    Commit: %s", commit.Hash)
-					color.Blue("    URL: %s", commit.URL)
-					color.White("    Author: %s", commit.AuthorName)
+					isTargetCommit := isTargetUser || userIdentifiers[commit.AuthorName] || userIdentifiers[commit.AuthorEmail]
+
+					if isTargetCommit {
+						color.HiMagenta("    ⭐ Commit: %s", commit.Hash)
+						color.HiBlue("    🔗 URL: %s", commit.URL)
+						color.HiWhite("    👤 Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+					} else {
+						color.Magenta("    Commit: %s", commit.Hash)
+						color.Blue("    URL: %s", commit.URL)
+						color.White("    Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+					}
+
 					if commit.IsOwnRepo {
 						color.Cyan("    Owner: true")
 					}
@@ -132,39 +193,54 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 					}
 
 					if checkSecrets && len(commit.Secrets) > 0 {
-						color.Red("    Potential secrets found:")
-						for _, secret := range commit.Secrets {
-							color.Red("      - %s", secret)
+						if isTargetCommit {
+							color.HiRed("    ⚠️  Potential secrets found:")
+							for _, secret := range commit.Secrets {
+								color.HiRed("      - %s", secret)
+							}
+						} else {
+							color.Red("    Potential secrets found:")
+							for _, secret := range commit.Secrets {
+								color.Red("      - %s", secret)
+							}
 						}
 					}
 
 					if showLinks && len(commit.Links) > 0 {
-						color.Blue("    Links found:")
-						for _, link := range commit.Links {
-							color.Blue("      - %s", link)
+						if isTargetCommit {
+							color.HiBlue("    🔍 Links found:")
+							for _, link := range commit.Links {
+								color.HiBlue("      - %s", link)
+							}
+						} else {
+							color.Blue("    Links found:")
+							for _, link := range commit.Links {
+								color.Blue("      - %s", link)
+							}
 						}
 					}
 				}
 			}
-		} else {
-			names := make([]string, 0, len(entry.Details.Names))
-			for name := range entry.Details.Names {
-				names = append(names, name)
-			}
-			color.White("  Names: %s", strings.Join(names, ", "))
-			color.White("  Total Commits: %d", entry.Details.CommitCount)
 		}
 	}
 }
 
 func main() {
+	cli.AppHelpTemplate = helpTemplate
 	// Configure logger to only show the message
 	log.SetFlags(0)
 
 	app := &cli.App{
-		Name:  "gitslurp",
-		Usage: "Analyze GitHub user's commit history across repositories. Accepts username or email address.",
+		Name:    "gitslurp",
+		Usage:   "OSINT tool to analyze GitHub user's commit history across repositories",
+		Version: "1.0.0",
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "token",
+				Aliases: []string{"t"},
+				Usage:   "GitHub personal access token",
+				EnvVars: []string{"GITHUB_TOKEN"},
+			},
 			&cli.BoolFlag{
 				Name:    "details",
 				Aliases: []string{"d"},
@@ -173,27 +249,32 @@ func main() {
 			&cli.BoolFlag{
 				Name:    "secrets",
 				Aliases: []string{"s"},
-				Usage:   "Check for potential secrets in commits",
+				Usage:   "Enable secret detection in commits",
 			},
 			&cli.BoolFlag{
 				Name:    "links",
 				Aliases: []string{"l"},
-				Usage:   "Extract links from commits",
-			},
-			&cli.StringFlag{
-				Name:    "token",
-				Aliases: []string{"t"},
-				Usage:   "GitHub personal access token",
-				EnvVars: []string{"GITHUB_TOKEN"},
+				Usage:   "Show URLs found in commit messages",
 			},
 		},
 		Action: runApp,
+		Before: func(c *cli.Context) error {
+			if c.Args().Len() == 0 && !c.Bool("help") && !c.Bool("version") {
+				art.PrintLogo()
+				cli.ShowAppHelp(c)
+				return cli.Exit("", 1)
+			}
+			if !c.Bool("help") && !c.Bool("version") {
+				art.PrintLogo()
+				fmt.Println()
+			}
+			return nil
+		},
 		Authors: []*cli.Author{
 			{
 				Name: "gnomegl",
 			},
 		},
-		Version: "1.0.0",
 	}
 
 	if err := app.Run(os.Args); err != nil {
