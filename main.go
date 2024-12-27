@@ -298,7 +298,7 @@ func main() {
 			&cli.BoolFlag{
 				Name:    "all",
 				Aliases: []string{"a"},
-				Usage:   "Show commits from all contributors",
+				Usage:   "Show commits from all contributors in the target's repositories.\n\tUseful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities",
 			},
 		},
 		Action: runApp,
