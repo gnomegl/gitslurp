@@ -15,10 +15,28 @@ import (
 	"github.com/google/go-github/v57/github"
 )
 
-func FetchRepos(ctx context.Context, client *github.Client, username string) ([]*github.Repository, error) {
+type Config struct {
+	MaxConcurrentRequests int
+	PerPage               int
+	SkipNodeModules       bool
+}
+
+func DefaultConfig() *Config {
+	return &Config{
+		MaxConcurrentRequests: 5,
+		PerPage:               100,
+		SkipNodeModules:       true,
+	}
+}
+
+func FetchRepos(ctx context.Context, client *github.Client, username string, cfg *Config) ([]*github.Repository, error) {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByUserOptions{
-		ListOptions: github.ListOptions{PerPage: 100},
+		ListOptions: github.ListOptions{PerPage: cfg.PerPage},
 		Type:        "public",
 	}
 
@@ -36,10 +54,14 @@ func FetchRepos(ctx context.Context, client *github.Client, username string) ([]
 	return allRepos, nil
 }
 
-func FetchCommits(ctx context.Context, client *github.Client, owner, repo string, isFork bool, since *time.Time, checkSecrets bool, findLinks bool) ([]models.CommitInfo, error) {
+func FetchCommits(ctx context.Context, client *github.Client, owner, repo string, isFork bool, since *time.Time, checkSecrets bool, findLinks bool, cfg *Config) ([]models.CommitInfo, error) {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
 	var allCommits []models.CommitInfo
 	opt := &github.CommitsListOptions{
-		ListOptions: github.ListOptions{PerPage: 100},
+		ListOptions: github.ListOptions{PerPage: cfg.PerPage},
 	}
 	if since != nil {
 		opt.Since = *since
@@ -75,7 +97,7 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 			}
 
 			if checkSecrets || findLinks {
-				content, err := fetchCommitContent(ctx, client, owner, repo, commit.GetSHA())
+				content, err := fetchCommitContent(ctx, client, owner, repo, commit.GetSHA(), cfg)
 				if err == nil {
 					if checkSecrets {
 						commitInfo.Secrets = scanner.CheckForSecrets(content)
@@ -98,7 +120,22 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 	return allCommits, nil
 }
 
-func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Repository, checkSecrets bool, findLinks bool) map[string]*models.EmailDetails {
+// processRepoWorker handles the processing of a single repository
+func processRepoWorker(ctx context.Context, client *github.Client, repo *github.Repository, checkSecrets bool, findLinks bool, cfg *Config) ([]models.CommitInfo, error) {
+	var since *time.Time
+	if repo.GetFork() {
+		createdAt := repo.GetCreatedAt()
+		since = &createdAt.Time
+	}
+
+	return FetchCommits(ctx, client, repo.GetOwner().GetLogin(), repo.GetName(), repo.GetFork(), since, checkSecrets, findLinks, cfg)
+}
+
+func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Repository, checkSecrets bool, findLinks bool, cfg *Config) map[string]*models.EmailDetails {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
 	emails := make(map[string]*models.EmailDetails)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -107,7 +144,7 @@ func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Re
 	s.Prefix = "Processing repositories "
 	s.Start()
 
-	semaphore := make(chan struct{}, 5)
+	semaphore := make(chan struct{}, cfg.MaxConcurrentRequests)
 
 	for _, repo := range repos {
 		wg.Add(1)
@@ -119,37 +156,14 @@ func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Re
 				wg.Done()
 			}()
 
-			var since *time.Time
-			if repo.GetFork() {
-				createdAt := repo.GetCreatedAt()
-				since = &createdAt.Time
-			}
-
-			commits, err := FetchCommits(ctx, client, repo.GetOwner().GetLogin(), repo.GetName(), repo.GetFork(), since, checkSecrets, findLinks)
+			commits, err := processRepoWorker(ctx, client, repo, checkSecrets, findLinks, cfg)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error fetching commits for %s: %v\n", repo.GetName(), err)
+				fmt.Fprintf(os.Stderr, "Error processing repo %s: %v\n", repo.GetName(), err)
 				return
 			}
 
 			mu.Lock()
-			for _, commit := range commits {
-				if commit.AuthorEmail == "" {
-					continue
-				}
-
-				email := commit.AuthorEmail
-				if _, exists := emails[email]; !exists {
-					emails[email] = &models.EmailDetails{
-						Names:   make(map[string]struct{}),
-						Commits: make(map[string][]models.CommitInfo),
-					}
-				}
-
-				details := emails[email]
-				details.Names[commit.AuthorName] = struct{}{}
-				details.Commits[repo.GetName()] = append(details.Commits[repo.GetName()], commit)
-				details.CommitCount++
-			}
+			aggregateCommits(emails, commits, repo.GetName())
 			mu.Unlock()
 		}(repo)
 	}
@@ -159,10 +173,35 @@ func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Re
 	return emails
 }
 
-func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo, sha string) (string, error) {
+func aggregateCommits(emails map[string]*models.EmailDetails, commits []models.CommitInfo, repoName string) {
+	for _, commit := range commits {
+		if commit.AuthorEmail == "" {
+			continue
+		}
+
+		email := commit.AuthorEmail
+		if _, exists := emails[email]; !exists {
+			emails[email] = &models.EmailDetails{
+				Names:   make(map[string]struct{}),
+				Commits: make(map[string][]models.CommitInfo),
+			}
+		}
+
+		details := emails[email]
+		details.Names[commit.AuthorName] = struct{}{}
+		details.Commits[repoName] = append(details.Commits[repoName], commit)
+		details.CommitCount++
+	}
+}
+
+func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo, sha string, cfg *Config) (string, error) {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
 	commit, _, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to fetch commit %s: %w", sha, err)
 	}
 
 	var content strings.Builder
@@ -171,8 +210,7 @@ func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo,
 
 	for _, file := range commit.Files {
 		filename := file.GetFilename()
-		// Skip files in node_modules directories
-		if strings.Contains(filename, "/node_modules/") || strings.HasPrefix(filename, "node_modules/") {
+		if cfg.SkipNodeModules && (strings.Contains(filename, "/node_modules/") || strings.HasPrefix(filename, "node_modules/")) {
 			continue
 		}
 		// Skip package management files
