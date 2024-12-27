@@ -6,7 +6,7 @@
 <div align="center">
   <img src="docs/assets/logo.png" alt="gitslurp logo" width="300">
   <br>
-  <strong>Discover and highlight GitHub user contributions with style 🎨</strong>
+  <strong>OSINT tool to analyze GitHub user's commit history across repositories</strong>
   <br><br>
   <a href="#features">Features</a> •
   <a href="#installation">Installation</a> •
