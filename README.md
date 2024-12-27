@@ -1,7 +1,5 @@
 # gitslurp 🔍
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/gnomegl/gitslurp)](https://goreportcard.com/report/github.com/gnomegl/gitslurp)
-[![GoDoc](https://godoc.org/github.com/gnomegl/gitslurp?status.svg)](https://godoc.org/github.com/gnomegl/gitslurp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/gnomegl/gitslurp)](https://golang.org/doc/devel/release.html)
 
@@ -68,6 +66,7 @@ gitslurp -t <github_token> <username>
 - `-d, --details`: Show detailed commit information
 - `-s, --secrets`: Enable secret detection in commits
 - `-l, --links`: Show URLs found in commit messages
+- `-a, --all`: Show commits from all contributors in the target's repositories. Useful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities
 
 ## Output Format
 
