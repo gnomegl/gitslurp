@@ -170,6 +170,19 @@ func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo,
 	content.WriteString("\n")
 
 	for _, file := range commit.Files {
+		filename := file.GetFilename()
+		// Skip files in node_modules directories
+		if strings.Contains(filename, "/node_modules/") || strings.HasPrefix(filename, "node_modules/") {
+			continue
+		}
+		// Skip package management files
+		switch filename {
+		case "package.json", "package-lock.json", // npm
+			"yarn.lock", ".yarnrc", ".yarnrc.yml", // yarn
+			"pnpm-lock.yaml", ".pnpmrc", // pnpm
+			"npm-shrinkwrap.json", ".npmrc": // npm
+			continue
+		}
 		if file.GetPatch() != "" {
 			content.WriteString(file.GetPatch())
 			content.WriteString("\n")

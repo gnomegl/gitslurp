@@ -25,7 +25,7 @@ Options:
    {{end}}`
 
 const (
-	currentVersion = "1.0.2"
+	currentVersion = "1.0.3"
 	repoOwner      = "gnomegl"
 	repoName       = "gitslurp"
 )
