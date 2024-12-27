@@ -131,12 +131,60 @@ func runApp(c *cli.Context) error {
 	}
 
 	var user *gh.User
+	var isOrg bool
 	if lookupEmail == "" {
 		user, _, err = client.Users.Get(ctx, username)
 		if err != nil {
-			color.Red("❌ Error fetching user details: %v", err)
+			// Check to see if it's an org instead
+			org, _, err := client.Organizations.Get(ctx, username)
+			if err != nil {
+				color.Red("❌ Error fetching details: %v", err)
+				return nil
+			}
+			isOrg = true
+			color.Green("✅ Organization detected: %s", *org.Login)
+			if org.Name != nil {
+				fmt.Printf("Name: %s\n", *org.Name)
+			}
+			if org.Description != nil {
+				fmt.Printf("Description: %s\n", *org.Description)
+			}
+			fmt.Println("\nAnalyzing organization repositories...")
+
+			repoAnalysis, err := github.AnalyzeOrgRepositories(ctx, client, username)
+			if err != nil {
+				color.Red("❌ Error analyzing repositories: %v", err)
+				return nil
+			}
+
+			// Display repository analysis
+			for _, repo := range repoAnalysis {
+				fmt.Printf("\n📦 Repository: %s\n", repo.RepoName)
+				fmt.Println("Contributors:")
+
+				// Sort contributors by number of commits
+				sort.Slice(repo.Contributors, func(i, j int) bool {
+					return repo.Contributors[i].Commits > repo.Contributors[j].Commits
+				})
+
+				for _, contributor := range repo.Contributors {
+					accessLabel := ""
+					if contributor.HasWriteAccess {
+						accessLabel = color.GreenString(" [Write Access]")
+					}
+					fmt.Printf("  - %s: %d commits%s\n",
+						contributor.Login,
+						contributor.Commits,
+						accessLabel)
+				}
+			}
 			return nil
 		}
+	}
+
+	if len(repos) == 0 {
+		color.Red("❌ No public repositories found for user: %s", username)
+		return nil
 	}
 
 	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks, cfg)
@@ -144,7 +192,7 @@ func runApp(c *cli.Context) error {
 		return fmt.Errorf("no commits found for user: %s", username)
 	}
 
-	displayResults(emails, showDetails, checkSecrets, showLinks, token, lookupEmail, username, user, showTargetOnly)
+	displayResults(emails, showDetails, checkSecrets, showLinks, token, lookupEmail, username, user, showTargetOnly, isOrg)
 	return nil
 }
 
@@ -152,7 +200,7 @@ func isUserIdentifier(identifier string, userIdentifiers map[string]bool) bool {
 	return userIdentifiers[identifier]
 }
 
-func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool) {
+func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool) {
 	type emailEntry struct {
 		Email   string
 		Details *models.EmailDetails
@@ -180,6 +228,14 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 	totalCommits := 0
 	totalContributors := 0
+
+	if user != nil {
+		accountType := "User"
+		if isOrg {
+			accountType = "Organization"
+		}
+		fmt.Printf("\n%s Account Information:\n", accountType)
+	}
 
 	fmt.Println("\nCollected author information:")
 	for _, entry := range sortedEmails {
