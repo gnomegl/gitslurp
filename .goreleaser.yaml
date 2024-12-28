@@ -14,7 +14,7 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/gnomegl/gitslurp/internal/utils.version={{.Version}}
+      - -X github.com/gnomegl/gitslurp/internal/utils.Version={{.Version}}
     mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
