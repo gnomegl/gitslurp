@@ -2,11 +2,22 @@ package art
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	"github.com/fatih/color"
 )
 
 var version string
+
+func getVersion() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		return info.Main.Version
+	}
+	return "unknown"
+}
 
 const LogoMain = `   _____   _   _____  _                    
   / ____(_) | /  ___)| |                   
