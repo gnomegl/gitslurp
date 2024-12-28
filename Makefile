@@ -1,6 +1,6 @@
 # Keep VERSION for manual releases
 VERSION ?= $(shell git describe --tags --always --dirty)
-LDFLAGS := -X github.com/gnomegl/gitslurp/internal/utils.version=$(VERSION)
+LDFLAGS := -X github.com/gnomegl/gitslurp/internal/utils.Version=$(VERSION)
 
 .PHONY: build
 build:
