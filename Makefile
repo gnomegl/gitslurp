@@ -1,6 +1,6 @@
 # Keep VERSION for manual releases
 VERSION ?= $(shell git describe --tags --always --dirty)
-LDFLAGS := -X main.version=$(VERSION) -X github.com/gnomegl/gitslurp/internal/art.version=$(VERSION)
+LDFLAGS := -X github.com/gnomegl/gitslurp/internal/utils.version=$(VERSION)
 
 .PHONY: build
 build:
@@ -13,4 +13,4 @@ install:
 .PHONY: release
 release:
 	git tag -a v$(VERSION) -m "Release v$(VERSION)"
-	git push origin v$(VERSION) 
+	git push origin v$(VERSION)

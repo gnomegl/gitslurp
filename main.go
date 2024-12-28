@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/gnomegl/gitslurp/internal/art"
 	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/urfave/cli/v2"
 )
@@ -26,19 +26,6 @@ Options:
    {{range .VisibleFlags}}{{.}}
    {{end}}`
 
-// version will be set by GoReleaser during builds or retrieved from runtime debug info
-var version string
-
-func getVersion() string {
-	if version != "" {
-		return version
-	}
-	if info, ok := debug.ReadBuildInfo(); ok {
-		return info.Main.Version
-	}
-	return "unknown"
-}
-
 func checkLatestVersion(ctx context.Context, client *gh.Client) {
 	release, _, err := client.Repositories.GetLatestRelease(ctx, "gnomegl", "gitslurp")
 	if err != nil {
@@ -46,9 +33,9 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 	}
 
 	latestVersion := strings.TrimPrefix(release.GetTagName(), "v")
-	if latestVersion != getVersion() {
+	if latestVersion != utils.GetVersion() {
 		color.Yellow("A new version of gitslurp is available: %s (you're running %s)",
-			latestVersion, getVersion())
+			latestVersion, utils.GetVersion())
 		color.Yellow("To update: ")
 		color.Cyan("go install github.com/gnomegl/gitslurp@latest")
 		fmt.Println()
@@ -381,7 +368,7 @@ func main() {
 	app := &cli.App{
 		Name:        "gitslurp",
 		Usage:       "OSINT tool to analyze GitHub user's commit history across repositories",
-		Version:     getVersion(),
+		Version:     "v" + utils.GetVersion(),
 		HideVersion: false,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
