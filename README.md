@@ -1,7 +1,11 @@
+<div align="center">
+
 # gitslurp 🔍
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/gnomegl/gitslurp)](https://golang.org/doc/devel/release.html)
+
+</div>
 
 <div align="center">
   <img src="docs/assets/logo.png" alt="gitslurp logo" width="300">
