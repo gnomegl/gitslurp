@@ -55,26 +55,6 @@ func runApp(c *cli.Context) error {
 
 	cfg := github.DefaultConfig()
 
-	// sneed: cli args parsing is jank but werks
-	args := c.Args().Slice()
-	if len(args) > 0 {
-		firstArgIndex := -1
-		for i, arg := range os.Args[1:] {
-			if !strings.HasPrefix(arg, "-") {
-				firstArgIndex = i + 1
-				break
-			}
-		}
-
-		if firstArgIndex > 0 {
-			for _, arg := range os.Args[firstArgIndex+1:] {
-				if strings.HasPrefix(arg, "-") {
-					return cli.ShowAppHelp(c)
-				}
-			}
-		}
-	}
-
 	if c.NArg() < 1 {
 		return cli.ShowAppHelp(c)
 	}
