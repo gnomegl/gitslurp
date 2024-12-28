@@ -2,6 +2,7 @@ package scanner
 
 import "regexp"
 
+// sneed: really jank regies, should use trufflehog probably
 var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)aws_access_key.*=.*`),
 	regexp.MustCompile(`(?i)aws_secret.*=.*`),
