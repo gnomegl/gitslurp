@@ -379,6 +379,11 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 func main() {
 	cli.AppHelpTemplate = helpTemplate
+	cli.VersionFlag = &cli.BoolFlag{
+		Name:    "version",
+		Aliases: []string{"v"},
+		Usage:   "Show version information",
+	}
 	// Configure logger to only show the message
 	log.SetFlags(0)
 
@@ -413,19 +418,8 @@ func main() {
 				Aliases: []string{"a"},
 				Usage:   "Show commits from all contributors in the target's repositories",
 			},
-			&cli.BoolFlag{
-				Name:    "version",
-				Aliases: []string{"v"},
-				Usage:   "Show version information",
-			},
 		},
-		Action: func(c *cli.Context) error {
-			if c.Bool("version") {
-				fmt.Printf("gitslurp version %s\n", version)
-				return nil
-			}
-			return runApp(c)
-		},
+		Action: runApp,
 		Before: func(c *cli.Context) error {
 			if c.Args().Len() == 0 && !c.Bool("help") && !c.Bool("version") {
 				art.PrintLogo()
