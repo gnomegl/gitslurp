@@ -42,8 +42,8 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 	if latestVersion != version {
 		color.Yellow("⚠️  A new version of gitslurp is available: %s (you're running %s)",
 			latestVersion, version)
-		color.Yellow("   Update at: https://github.com/%s/%s/releases/latest",
-			repoOwner, repoName)
+		color.Yellow("   Update: ") 
+		color.HiWhite("go install github.com/%s/%s@latest", repoOwner, repoName)
 		fmt.Println()
 	}
 }
