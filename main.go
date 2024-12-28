@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/gnomegl/gitslurp/internal/art"
@@ -53,7 +54,7 @@ func runApp(c *cli.Context) error {
 
 	cfg := github.DefaultConfig()
 
-	// Check if flags appear after arguments
+	// sneed: cli args parsing is jank but werks
 	args := c.Args().Slice()
 	if len(args) > 0 {
 		firstArgIndex := -1
@@ -65,7 +66,6 @@ func runApp(c *cli.Context) error {
 		}
 
 		if firstArgIndex > 0 {
-			// Check if there are any flags after the first non-flag argument
 			for _, arg := range os.Args[firstArgIndex+1:] {
 				if strings.HasPrefix(arg, "-") {
 					return cli.ShowAppHelp(c)
@@ -119,80 +119,68 @@ func runApp(c *cli.Context) error {
 	}
 	fmt.Println()
 
-	repos, err := github.FetchRepos(ctx, client, username, cfg)
+	var user *gh.User
+	var isOrg bool
+	var err error
+
+	if lookupEmail == "" {
+		user, _, err = client.Users.Get(ctx, username)
+		if err != nil {
+			color.Red("❌ Error fetching details: %v", err)
+			return nil
+		}
+
+		if user.GetType() == "Organization" {
+			isOrg = true
+			color.Green("✅ Organization detected: %s", user.GetLogin())
+			if user.GetName() != "" {
+				fmt.Printf("Name: %s\n", user.GetName())
+			}
+		} else {
+			color.Green("✅ User detected: %s", user.GetLogin())
+			if user.GetName() != "" {
+				fmt.Printf("Name: %s\n", user.GetName())
+			}
+			if user.GetBio() != "" {
+				fmt.Printf("Bio: %s\n", user.GetBio())
+			}
+		}
+	}
+
+	var repos []*gh.Repository
+	if isOrg {
+		repos, err = github.FetchOrgRepos(ctx, client, username, cfg)
+	} else {
+		repos, err = github.FetchRepos(ctx, client, username, cfg)
+	}
+
 	if err != nil {
 		color.Red("❌ Error: %v", err)
 		return nil
 	}
 
 	if len(repos) == 0 {
-		color.Red("❌ No public repositories found for user: %s", username)
-		return nil
-	}
-
-	var user *gh.User
-	var isOrg bool
-	if lookupEmail == "" {
-		user, _, err = client.Users.Get(ctx, username)
-		if err != nil {
-			// Check to see if it's an org instead
-			org, _, err := client.Organizations.Get(ctx, username)
-			if err != nil {
-				color.Red("❌ Error fetching details: %v", err)
-				return nil
-			}
-			isOrg = true
-			color.Green("✅ Organization detected: %s", *org.Login)
-			if org.Name != nil {
-				fmt.Printf("Name: %s\n", *org.Name)
-			}
-			if org.Description != nil {
-				fmt.Printf("Description: %s\n", *org.Description)
-			}
-			fmt.Println("\nAnalyzing organization repositories...")
-
-			repoAnalysis, err := github.AnalyzeOrgRepositories(ctx, client, username)
-			if err != nil {
-				color.Red("❌ Error analyzing repositories: %v", err)
-				return nil
-			}
-
-			// Display repository analysis
-			for _, repo := range repoAnalysis {
-				fmt.Printf("\n📦 Repository: %s\n", repo.RepoName)
-				fmt.Println("Contributors:")
-
-				// Sort contributors by number of commits
-				sort.Slice(repo.Contributors, func(i, j int) bool {
-					return repo.Contributors[i].Commits > repo.Contributors[j].Commits
-				})
-
-				for _, contributor := range repo.Contributors {
-					accessLabel := ""
-					if contributor.HasWriteAccess {
-						accessLabel = color.GreenString(" [Write Access]")
-					}
-					fmt.Printf("  - %s: %d commits%s\n",
-						contributor.Login,
-						contributor.Commits,
-						accessLabel)
-				}
-			}
-			return nil
+		if isOrg {
+			color.Red("❌ No public repositories found for organization: %s", username)
+		} else {
+			color.Red("❌ No public repositories found for user: %s", username)
 		}
-	}
-
-	if len(repos) == 0 {
-		color.Red("❌ No public repositories found for user: %s", username)
 		return nil
 	}
 
 	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks, cfg)
 	if len(emails) == 0 {
+		if isOrg {
+			return fmt.Errorf("no commits found for organization: %s", username)
+		}
 		return fmt.Errorf("no commits found for user: %s", username)
 	}
 
-	displayResults(emails, showDetails, checkSecrets, showLinks, token, lookupEmail, username, user, showTargetOnly, isOrg)
+	// sneed: progress bar needs artificial delay to avoid race condition
+	time.Sleep(500 * time.Millisecond)
+	fmt.Println()
+
+	displayResults(emails, showDetails, checkSecrets, showLinks, lookupEmail, username, user, showTargetOnly, isOrg)
 	return nil
 }
 
@@ -200,7 +188,7 @@ func isUserIdentifier(identifier string, userIdentifiers map[string]bool) bool {
 	return userIdentifiers[identifier]
 }
 
-func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, token string, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool) {
+func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool) {
 	type emailEntry struct {
 		Email   string
 		Details *models.EmailDetails
@@ -215,7 +203,6 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 		return sortedEmails[i].Details.CommitCount > sortedEmails[j].Details.CommitCount
 	})
 
-	// Create a set of the user's known identifiers
 	userIdentifiers := map[string]bool{
 		knownUsername: true,
 		lookupEmail:   true,
