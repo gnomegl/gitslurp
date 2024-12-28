@@ -18,9 +18,8 @@ const LogoMain = `   _____   _   _____  _
                                   | |    
                                   |_|    %s`
 
-const LogoText = "v%s by gnomegl"
+const LogoText = "v%s by @0xGnomeGL"
 
-// PrintLogo prints the gitslurp logo in color
 func PrintLogo() {
-	color.Cyan(fmt.Sprintf(LogoMain, color.HiYellowString(fmt.Sprintf(LogoText, version))))
+	color.Cyan(fmt.Sprintf(LogoMain, color.HiRedString(fmt.Sprintf(LogoText, version))))
 }
