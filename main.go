@@ -27,7 +27,8 @@ Options:
 
 // based: version injected at build time
 var (
-	version   = "dev"
+	// version will be set by GoReleaser during builds
+	version   string = "dev"
 	repoOwner = "gnomegl"
 	repoName  = "gitslurp"
 )
