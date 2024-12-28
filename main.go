@@ -43,29 +43,44 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 }
 
 func runApp(c *cli.Context) error {
+	allArgs := os.Args[1:]
+
+	showDetails := false
+	checkSecrets := false
+	showLinks := false
+	showTargetOnly := true
+	var target string
+
+	for _, arg := range allArgs {
+		switch arg {
+		case "-d", "--details":
+			showDetails = true
+		case "-s", "--secrets":
+			checkSecrets = true
+		case "-l", "--links":
+			showLinks = true
+		case "-a", "--all":
+			showTargetOnly = false
+		default:
+			if !strings.HasPrefix(arg, "-") {
+				target = arg
+			}
+		}
+	}
+
+	if target == "" {
+		return cli.ShowAppHelp(c)
+	}
+
 	token := github.GetToken(c)
 	client := github.GetGithubClient(token)
 	checkLatestVersion(context.Background(), client)
 
 	cfg := github.DefaultConfig()
-
-	if c.NArg() < 1 {
-		return cli.ShowAppHelp(c)
-	}
-
-	input := c.Args().First()
-	showDetails := c.Bool("details")
-	checkSecrets := c.Bool("secrets")
-	showLinks := c.Bool("links")
-	showTargetOnly := true
-	if c.Bool("all") {
-		showTargetOnly = false
-	}
-
-	ctx := context.Background()
+	input := target
 
 	if token != "" {
-		if err := github.ValidateToken(ctx, client); err != nil {
+		if err := github.ValidateToken(context.Background(), client); err != nil {
 			return fmt.Errorf("token validation failed: %v", err)
 		}
 	}
@@ -76,7 +91,7 @@ func runApp(c *cli.Context) error {
 		lookupEmail = input
 		color.Blue("\nLooking up GitHub user for email: %s", input)
 
-		user, err := github.GetUserByEmail(ctx, client, input)
+		user, err := github.GetUserByEmail(context.Background(), client, input)
 		if err != nil {
 			color.Red("❌ Error: %v", err)
 			return nil
@@ -100,7 +115,7 @@ func runApp(c *cli.Context) error {
 
 	if lookupEmail == "" {
 		// Check if target is an organization
-		isOrg, err = github.IsOrganization(ctx, client, username)
+		isOrg, err = github.IsOrganization(context.Background(), client, username)
 		if err != nil {
 			color.Red("❌ Error checking organization status: %v", err)
 			return nil
@@ -112,7 +127,7 @@ func runApp(c *cli.Context) error {
 			color.Green("✅ Organization detected: %s", username)
 		}
 
-		user, _, err = client.Users.Get(ctx, username)
+		user, _, err = client.Users.Get(context.Background(), username)
 		if err != nil {
 			color.Red("❌ Error fetching details: %v", err)
 			return nil
@@ -137,16 +152,16 @@ func runApp(c *cli.Context) error {
 	var gists []*gh.Gist
 
 	if isOrg {
-		repos, err = github.FetchOrgRepos(ctx, client, username, cfg)
+		repos, err = github.FetchOrgRepos(context.Background(), client, username, cfg)
 	} else {
-		repos, err = github.FetchRepos(ctx, client, username, cfg)
+		repos, err = github.FetchRepos(context.Background(), client, username, cfg)
 		if err != nil {
 			color.Red("❌ Error: %v", err)
 			return nil
 		}
 
 		// Only fetch gists for users, not organizations
-		gists, err = github.FetchGists(ctx, client, username, cfg)
+		gists, err = github.FetchGists(context.Background(), client, username, cfg)
 		if err != nil {
 			// We only warn for gist errors since they're not critical
 			color.Yellow("⚠️  Warning: Could not fetch gists: %v", err)
@@ -168,12 +183,12 @@ func runApp(c *cli.Context) error {
 	}
 
 	// Process repos
-	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks, cfg)
+	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, showLinks, cfg)
 
 	// Only process gists if we're checking for secrets or links
 	if len(gists) > 0 && (checkSecrets || showLinks) {
 		color.Blue("\nProcessing %d public gists for secrets and links...", len(gists))
-		gistEmails := github.ProcessGists(ctx, client, gists, checkSecrets, showLinks, cfg)
+		gistEmails := github.ProcessGists(context.Background(), client, gists, checkSecrets, showLinks, cfg)
 		// Merge gist emails with repo emails
 		for email, details := range gistEmails {
 			if existing, ok := emails[email]; ok {
@@ -260,11 +275,11 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			}
 		}
 
+		totalContributors++
+
 		if showTargetOnly && !isTargetUser {
 			continue
 		}
-
-		totalContributors++
 
 		if isTargetUser {
 			totalCommits += entry.Details.CommitCount
@@ -362,14 +377,12 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 func main() {
 	cli.AppHelpTemplate = helpTemplate
-	// Configure logger to only show the message
 	log.SetFlags(0)
 
 	app := &cli.App{
-		Name:        "gitslurp",
-		Usage:       "OSINT tool to analyze GitHub user's commit history across repositories",
-		Version:     "v" + utils.GetVersion(),
-		HideVersion: false,
+		Name:    "gitslurp",
+		Usage:   "OSINT tool to analyze GitHub user's commit history across repositories",
+		Version: "v" + utils.GetVersion(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "token",
@@ -398,9 +411,10 @@ func main() {
 				Usage:   "Show commits from all contributors in the target's repositories",
 			},
 		},
-		Action: runApp,
+		Action:    runApp,
+		ArgsUsage: "<username|email>",
 		Before: func(c *cli.Context) error {
-			if c.Args().Len() == 0 && !c.Bool("help") && !c.Bool("version") {
+			if len(os.Args) == 1 && !c.Bool("help") && !c.Bool("version") {
 				art.PrintLogo()
 				cli.ShowAppHelp(c)
 				return cli.Exit("", 1)
@@ -412,9 +426,7 @@ func main() {
 			return nil
 		},
 		Authors: []*cli.Author{
-			{
-				Name: "gnomegl",
-			},
+			{Name: "gnomegl"},
 		},
 	}
 
