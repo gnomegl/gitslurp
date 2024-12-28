@@ -34,7 +34,7 @@ gitslurp soxoj
 ## Features
 
 - 🎯 **User-Centric Analysis**: Search by GitHub username or email address
-- 📊 **Comprehensive Commit History**: View all commits made by a user across public repositories
+- ���� **Comprehensive Commit History**: View all commits made by a user across public repositories
 - 🎨 **Visual Highlighting**: Easily identify target user's commits with color-coding and emojis
 - 🔄 **Multiple Identity Support**: Detects and groups commits from different email addresses and names
 - 🔐 **Security Features**: Optional secret detection in commits
@@ -70,7 +70,7 @@ gitslurp -t <github_token> <username>
 - `--details, -d`: Show detailed commit information
 - `--secrets, -s`: Enable secret detection in commits
 - `--links, -l`: Show URLs found in commit messages
-- `--all, -a`: Show commits from all contributors in the target's repositories. This is useful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities
+- `--all, -a`: Show commits from all contributors in the target's repositories. This is useful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities. Note: This flag is automatically enabled when scanning organizations.
 
 ## Output Format
 

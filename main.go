@@ -42,7 +42,7 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 	if latestVersion != version {
 		color.Yellow("A new version of gitslurp is available: %s (you're running %s)",
 			latestVersion, version)
-		color.Yellow("To update: ") 
+		color.Yellow("To update: ")
 		color.Cyan("go install github.com/%s/%s@latest", repoOwner, repoName)
 		fmt.Println()
 	}
@@ -105,15 +105,26 @@ func runApp(c *cli.Context) error {
 	var err error
 
 	if lookupEmail == "" {
+		// Check if target is an organization
+		isOrg, err = github.IsOrganization(ctx, client, username)
+		if err != nil {
+			color.Red("❌ Error checking organization status: %v", err)
+			return nil
+		}
+
+		if isOrg {
+			// Force show all commits for organizations
+			showTargetOnly = false
+			color.Green("✅ Organization detected: %s", username)
+		}
+
 		user, _, err = client.Users.Get(ctx, username)
 		if err != nil {
 			color.Red("❌ Error fetching details: %v", err)
 			return nil
 		}
 
-		if user.GetType() == "Organization" {
-			isOrg = true
-			color.Green("✅ Organization detected: %s", user.GetLogin())
+		if isOrg {
 			if user.GetName() != "" {
 				fmt.Printf("Name: %s\n", user.GetName())
 			}
@@ -129,10 +140,23 @@ func runApp(c *cli.Context) error {
 	}
 
 	var repos []*gh.Repository
+	var gists []*gh.Gist
+
 	if isOrg {
 		repos, err = github.FetchOrgRepos(ctx, client, username, cfg)
 	} else {
 		repos, err = github.FetchRepos(ctx, client, username, cfg)
+		if err != nil {
+			color.Red("❌ Error: %v", err)
+			return nil
+		}
+
+		// Only fetch gists for users, not organizations
+		gists, err = github.FetchGists(ctx, client, username, cfg)
+		if err != nil {
+			// We only warn for gist errors since they're not critical
+			color.Yellow("⚠️  Warning: Could not fetch gists: %v", err)
+		}
 	}
 
 	if err != nil {
@@ -140,21 +164,45 @@ func runApp(c *cli.Context) error {
 		return nil
 	}
 
-	if len(repos) == 0 {
+	if len(repos) == 0 && len(gists) == 0 {
 		if isOrg {
 			color.Red("❌ No public repositories found for organization: %s", username)
 		} else {
-			color.Red("❌ No public repositories found for user: %s", username)
+			color.Red("❌ No public repositories or gists found for user: %s", username)
 		}
 		return nil
 	}
 
+	// Process repos
 	emails := github.ProcessRepos(ctx, client, repos, checkSecrets, showLinks, cfg)
+
+	// Only process gists if we're checking for secrets or links
+	if len(gists) > 0 && (checkSecrets || showLinks) {
+		color.Blue("\nProcessing %d public gists for secrets and links...", len(gists))
+		gistEmails := github.ProcessGists(ctx, client, gists, checkSecrets, showLinks, cfg)
+		// Merge gist emails with repo emails
+		for email, details := range gistEmails {
+			if existing, ok := emails[email]; ok {
+				// Merge names
+				for name := range details.Names {
+					existing.Names[name] = struct{}{}
+				}
+				// Merge commits
+				for repoName, commits := range details.Commits {
+					existing.Commits[repoName] = append(existing.Commits[repoName], commits...)
+				}
+				existing.CommitCount += details.CommitCount
+			} else {
+				emails[email] = details
+			}
+		}
+	}
+
 	if len(emails) == 0 {
 		if isOrg {
 			return fmt.Errorf("no commits found for organization: %s", username)
 		}
-		return fmt.Errorf("no commits found for user: %s", username)
+		return fmt.Errorf("no commits or gists found for user: %s", username)
 	}
 
 	// sneed: progress bar needs artificial delay to avoid race condition
