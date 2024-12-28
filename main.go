@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -27,8 +28,17 @@ Options:
 
 // based: version injected at build time
 var (
-	// version will be set by GoReleaser during builds
-	version   string = "dev"
+	// version will be set by GoReleaser during builds or retrieved from runtime debug info
+	version = func() string {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "(devel)" {
+			return info.Main.Version
+		}
+		// Fallback to version set by ldflags
+		if v := "dev"; v != "dev" {
+			return v
+		}
+		return "dev"
+	}()
 	repoOwner = "gnomegl"
 	repoName  = "gitslurp"
 )
@@ -403,8 +413,19 @@ func main() {
 				Aliases: []string{"a"},
 				Usage:   "Show commits from all contributors in the target's repositories",
 			},
+			&cli.BoolFlag{
+				Name:    "version",
+				Aliases: []string{"v"},
+				Usage:   "Show version information",
+			},
 		},
-		Action: runApp,
+		Action: func(c *cli.Context) error {
+			if c.Bool("version") {
+				fmt.Printf("gitslurp version %s\n", version)
+				return nil
+			}
+			return runApp(c)
+		},
 		Before: func(c *cli.Context) error {
 			if c.Args().Len() == 0 && !c.Bool("help") && !c.Bool("version") {
 				art.PrintLogo()
