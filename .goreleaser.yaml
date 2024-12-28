@@ -30,6 +30,7 @@ archives:
         format: zip
 
 changelog:
+  use: github
   sort: asc
   filters:
     exclude:
@@ -38,3 +39,26 @@ changelog:
       - '^ci:'
       - Merge pull request
       - Merge branch
+  groups:
+    - title: 'New Features'
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: 'Bug fixes'
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: gnomegl
+    name: gitslurp
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## gitslurp {{ .Version }} ({{ .Date }})
+    
+    For installation instructions, visit https://github.com/gnomegl/gitslurp#installation
+  footer: |
+    **Full Changelog**: https://github.com/gnomegl/gitslurp/compare/{{ .PreviousTag }}...{{ .Tag }}
