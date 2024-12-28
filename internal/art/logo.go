@@ -6,8 +6,7 @@ import (
 	"github.com/fatih/color"
 )
 
-// based: injected at build time
-var version = "dev"
+var version string
 
 const LogoMain = `   _____   _   _____  _                    
   / ____(_) | /  ___)| |                   
