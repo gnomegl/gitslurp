@@ -13,7 +13,10 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X github.com/gnomegl/gitslurp/internal/art.version={{.Version}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
   - format: tar.gz
