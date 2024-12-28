@@ -62,7 +62,7 @@ gitslurp -t <github_token> <username>
 
 ### Options
 
-- `--token, -t`: GitHub personal access token (can also be set via `GITHUB_TOKEN` environment variable)
+- `--token, -t`: GitHub personal access token (can also be set via `GITSLURP_GITHUB_TOKEN` environment variable)
 - `--details, -d`: Show detailed commit information
 - `--secrets, -s`: Enable secret detection in commits
 - `--links, -l`: Show URLs found in commit messages
