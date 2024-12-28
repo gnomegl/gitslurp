@@ -2,22 +2,10 @@ package art
 
 import (
 	"fmt"
-	"runtime/debug"
 
 	"github.com/fatih/color"
+	"github.com/gnomegl/gitslurp/internal/utils"
 )
-
-var version string
-
-func getVersion() string {
-	if version != "" {
-		return version
-	}
-	if info, ok := debug.ReadBuildInfo(); ok {
-		return info.Main.Version
-	}
-	return "unknown"
-}
 
 const LogoMain = `   _____   _   _____  _                    
   / ____(_) | /  ___)| |                   
@@ -31,5 +19,6 @@ const LogoMain = `   _____   _   _____  _
 const LogoText = "v%s by @0xGnomeGL"
 
 func PrintLogo() {
-	color.Cyan(fmt.Sprintf(LogoMain, color.HiRedString(fmt.Sprintf(LogoText, version))))
+	color.Cyan(fmt.Sprintf(LogoMain, color.HiRedString(fmt.Sprintf(LogoText, utils.GetVersion()))))
+	fmt.Println()
 }
