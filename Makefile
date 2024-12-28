@@ -1,3 +1,4 @@
+# Keep VERSION for manual releases
 VERSION ?= $(shell git describe --tags --always --dirty)
 LDFLAGS := -X main.version=$(VERSION) -X github.com/gnomegl/gitslurp/internal/art.version=$(VERSION)
 

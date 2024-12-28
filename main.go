@@ -26,35 +26,31 @@ Options:
    {{range .VisibleFlags}}{{.}}
    {{end}}`
 
-// based: version injected at build time
-var (
-	// version will be set by GoReleaser during builds or retrieved from runtime debug info
-	version = func() string {
-		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "(devel)" {
-			return info.Main.Version
-		}
-		// Fallback to version set by ldflags
-		if v := "dev"; v != "dev" {
-			return v
-		}
-		return "dev"
-	}()
-	repoOwner = "gnomegl"
-	repoName  = "gitslurp"
-)
+// version will be set by GoReleaser during builds or retrieved from runtime debug info
+var version string
+
+func getVersion() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		return info.Main.Version
+	}
+	return "unknown"
+}
 
 func checkLatestVersion(ctx context.Context, client *gh.Client) {
-	release, _, err := client.Repositories.GetLatestRelease(ctx, repoOwner, repoName)
+	release, _, err := client.Repositories.GetLatestRelease(ctx, "gnomegl", "gitslurp")
 	if err != nil {
 		return // Silently fail version check
 	}
 
 	latestVersion := strings.TrimPrefix(release.GetTagName(), "v")
-	if latestVersion != version {
+	if latestVersion != getVersion() {
 		color.Yellow("A new version of gitslurp is available: %s (you're running %s)",
-			latestVersion, version)
+			latestVersion, getVersion())
 		color.Yellow("To update: ")
-		color.Cyan("go install github.com/%s/%s@latest", repoOwner, repoName)
+		color.Cyan("go install github.com/gnomegl/gitslurp@latest")
 		fmt.Println()
 	}
 }
@@ -379,18 +375,14 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 func main() {
 	cli.AppHelpTemplate = helpTemplate
-	cli.VersionFlag = &cli.BoolFlag{
-		Name:    "version",
-		Aliases: []string{"v"},
-		Usage:   "Show version information",
-	}
 	// Configure logger to only show the message
 	log.SetFlags(0)
 
 	app := &cli.App{
-		Name:    "gitslurp",
-		Usage:   "OSINT tool to analyze GitHub user's commit history across repositories",
-		Version: version,
+		Name:        "gitslurp",
+		Usage:       "OSINT tool to analyze GitHub user's commit history across repositories",
+		Version:     getVersion(),
+		HideVersion: false,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "token",
