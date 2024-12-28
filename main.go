@@ -25,10 +25,11 @@ Options:
    {{range .VisibleFlags}}{{.}}
    {{end}}`
 
-const (
-	currentVersion = "1.0.3"
-	repoOwner      = "gnomegl"
-	repoName       = "gitslurp"
+// based: version injected at build time
+var (
+	version   = "dev"
+	repoOwner = "gnomegl"
+	repoName  = "gitslurp"
 )
 
 func checkLatestVersion(ctx context.Context, client *gh.Client) {
@@ -38,9 +39,9 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 	}
 
 	latestVersion := strings.TrimPrefix(release.GetTagName(), "v")
-	if latestVersion != currentVersion {
+	if latestVersion != version {
 		color.Yellow("⚠️  A new version of gitslurp is available: %s (you're running %s)",
-			latestVersion, currentVersion)
+			latestVersion, version)
 		color.Yellow("   Update at: https://github.com/%s/%s/releases/latest",
 			repoOwner, repoName)
 		fmt.Println()
@@ -345,13 +346,13 @@ func main() {
 	app := &cli.App{
 		Name:    "gitslurp",
 		Usage:   "OSINT tool to analyze GitHub user's commit history across repositories",
-		Version: currentVersion,
+		Version: version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "token",
 				Aliases: []string{"t"},
 				Usage:   "GitHub personal access token",
-				EnvVars: []string{"GITHUB_TOKEN"},
+				EnvVars: []string{"GITSLURP_GITHUB_TOKEN"},
 			},
 			&cli.BoolFlag{
 				Name:    "details",

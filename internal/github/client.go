@@ -23,7 +23,7 @@ func GetGithubClient(token string) *github.Client {
 }
 
 func GetToken(c *cli.Context) string {
-	token := os.Getenv("GITHUB_TOKEN")
+	token := os.Getenv("GITSLURP_GITHUB_TOKEN")
 	if token != "" {
 		return token
 	}
