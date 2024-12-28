@@ -3,7 +3,6 @@ package github
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -11,8 +10,8 @@ import (
 	"github.com/gnomegl/gitslurp/internal/models"
 	"github.com/gnomegl/gitslurp/internal/scanner"
 
-	"github.com/briandowns/spinner"
 	"github.com/google/go-github/v57/github"
+	"github.com/schollz/progressbar/v3"
 )
 
 type Config struct {
@@ -120,7 +119,7 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 	return allCommits, nil
 }
 
-// processRepoWorker handles the processing of a single repository
+// process a single repo
 func processRepoWorker(ctx context.Context, client *github.Client, repo *github.Repository, checkSecrets bool, findLinks bool, cfg *Config) ([]models.CommitInfo, error) {
 	var since *time.Time
 	if repo.GetFork() {
@@ -131,48 +130,55 @@ func processRepoWorker(ctx context.Context, client *github.Client, repo *github.
 	return FetchCommits(ctx, client, repo.GetOwner().GetLogin(), repo.GetName(), repo.GetFork(), since, checkSecrets, findLinks, cfg)
 }
 
+// based: concurrent repo processing with rate limiting
 func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Repository, checkSecrets bool, findLinks bool, cfg *Config) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
 
 	emails := make(map[string]*models.EmailDetails)
-	var mu sync.Mutex
+	var mutex sync.Mutex
+	sem := make(chan bool, cfg.MaxConcurrentRequests)
 	var wg sync.WaitGroup
 
-	s := spinner.New(spinner.CharSets[9], 100*time.Millisecond)
-	s.Prefix = "Processing repositories "
-	s.Start()
-
-	semaphore := make(chan struct{}, cfg.MaxConcurrentRequests)
+	bar := progressbar.NewOptions(len(repos),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetDescription("[cyan]Slurping repositories[reset]"),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}))
 
 	for _, repo := range repos {
 		wg.Add(1)
-		semaphore <- struct{}{}
-
 		go func(repo *github.Repository) {
-			defer func() {
-				<-semaphore
-				wg.Done()
-			}()
+			defer wg.Done()
+			sem <- true
+			defer func() { <-sem }()
 
 			commits, err := processRepoWorker(ctx, client, repo, checkSecrets, findLinks, cfg)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error processing repo %s: %v\n", repo.GetName(), err)
 				return
 			}
 
-			mu.Lock()
-			aggregateCommits(emails, commits, repo.GetName())
-			mu.Unlock()
+			mutex.Lock()
+			aggregateCommits(emails, commits, *repo.Name)
+			mutex.Unlock()
+
+			bar.Add(1)
 		}(repo)
 	}
 
 	wg.Wait()
-	s.Stop()
+	bar.Finish()
 	return emails
 }
 
+// email -> commit mapping
 func aggregateCommits(emails map[string]*models.EmailDetails, commits []models.CommitInfo, repoName string) {
 	for _, commit := range commits {
 		if commit.AuthorEmail == "" {
@@ -194,6 +200,7 @@ func aggregateCommits(emails map[string]*models.EmailDetails, commits []models.C
 	}
 }
 
+// get commit content
 func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo, sha string, cfg *Config) (string, error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
@@ -203,17 +210,16 @@ func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo,
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch commit %s: %w", sha, err)
 	}
-
 	var content strings.Builder
 	content.WriteString(commit.Commit.GetMessage())
 	content.WriteString("\n")
 
 	for _, file := range commit.Files {
 		filename := file.GetFilename()
+		// js ecosystem is bloat
 		if cfg.SkipNodeModules && (strings.Contains(filename, "/node_modules/") || strings.HasPrefix(filename, "node_modules/")) {
 			continue
 		}
-		// Skip package management files
 		switch filename {
 		case "package.json", "package-lock.json", // npm
 			"yarn.lock", ".yarnrc", ".yarnrc.yml", // yarn
