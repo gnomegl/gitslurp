@@ -1,25 +1,36 @@
 package scanner
 
-import "regexp"
+import (
+	"context"
+	"strings"
 
-var secretPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)aws_access_key.*=.*`),
-	regexp.MustCompile(`(?i)aws_secret.*=.*`),
-	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
-	regexp.MustCompile(`(?i)private_key.*=.*`),
-	regexp.MustCompile(`(?i)secret.*=.*[0-9a-zA-Z]{16,}`),
-	regexp.MustCompile(`(?i)password.*=.*[0-9a-zA-Z]{8,}`),
-	regexp.MustCompile(`(?i)token.*=.*[0-9a-zA-Z]{8,}`),
-	regexp.MustCompile(`-----BEGIN ((RSA|DSA|EC|PGP|OPENSSH) )?PRIVATE KEY( BLOCK)?-----`),
-	regexp.MustCompile(`(?i)github[_\-\.]?token.*=.*[0-9a-zA-Z]{35,40}`),
-	regexp.MustCompile(`(?i)api[_\-\.]?key.*=.*[0-9a-zA-Z]{16,}`),
-}
+	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
+	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+)
 
 func CheckForSecrets(content string) []string {
 	var secrets []string
-	for _, pattern := range secretPatterns {
-		matches := pattern.FindAllString(content, -1)
-		secrets = append(secrets, matches...)
+	ctx := context.Background()
+
+	allDetectors := detectors.AllDetectors(ctx)
+
+	for _, detector := range allDetectors {
+		if detector.Type() == detectorspb.DetectorType_Network {
+			continue
+		}
+
+		results, err := detector.FromData(ctx, []byte(content))
+		if err != nil {
+			continue
+		}
+
+		for _, result := range results {
+			secret := strings.TrimSpace(result.Raw)
+			if secret != "" {
+				secrets = append(secrets, result.DetectorType.String()+": "+secret)
+			}
+		}
 	}
+
 	return secrets
 }
