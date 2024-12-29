@@ -302,6 +302,25 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 		if showDetails || checkSecrets || showLinks {
 			for repoName, commits := range entry.Details.Commits {
+				// only show repo header if we're showing details, have links, or have secrets in this repo
+				repoHasContent := false
+				if showDetails {
+					repoHasContent = true
+				} else {
+					// check if repo has any content worth showing
+					for _, commit := range commits {
+						if (checkSecrets && len(commit.Secrets) > 0) ||
+							(showLinks && len(commit.Links) > 0) {
+							repoHasContent = true
+							break
+						}
+					}
+				}
+
+				if !repoHasContent {
+					continue
+				}
+
 				if isTargetUser {
 					color.HiGreen("  📂 Repo: %s", repoName)
 				} else {
@@ -319,21 +338,24 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 					isTargetCommit := isTargetUser || isUserIdentifier(commit.AuthorName, userIdentifiers) || isUserIdentifier(commit.AuthorEmail, userIdentifiers)
 
-					if isTargetCommit {
-						color.HiMagenta("    ⭐ Commit: %s", commit.Hash)
-						color.HiBlue("    🔗 URL: %s", commit.URL)
-						color.HiWhite("    👤 Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
-					} else {
-						color.Magenta("    Commit: %s", commit.Hash)
-						color.Blue("    URL: %s", commit.URL)
-						color.White("    Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
-					}
+					// only show commit details if showing details or if we found secrets/links
+					if showDetails || len(commit.Secrets) > 0 || len(commit.Links) > 0 {
+						if isTargetCommit {
+							color.HiMagenta("    ⭐ Commit: %s", commit.Hash)
+							color.HiBlue("    🔗 URL: %s", commit.URL)
+							color.HiWhite("    👤 Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+						} else {
+							color.Magenta("    Commit: %s", commit.Hash)
+							color.Blue("    URL: %s", commit.URL)
+							color.White("    Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+						}
 
-					if commit.IsOwnRepo {
-						color.Cyan("    Owner: true")
-					}
-					if commit.IsFork {
-						color.Cyan("    Fork: true")
+						if commit.IsOwnRepo {
+							color.Cyan("    Owner: true")
+						}
+						if commit.IsFork {
+							color.Cyan("    Fork: true")
+						}
 					}
 
 					if checkSecrets && len(commit.Secrets) > 0 {
