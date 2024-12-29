@@ -36,7 +36,7 @@ gitslurp soxoj
 - 📊 **Comprehensive Commit History**: View all commits made by a user across public repositories
 - 🎯 **Visual Highlighting**: Easily identify target user's commits with color-coding and emojis
 - 👥 **Multiple Identity Support**: Detects and groups commits from different email addresses and names
-- 🔒 **Security Features**: Optional secret detection in commits
+- 🐽 **Advanced Secret Detection**: Powered by [TruffleHog](https://github.com/trufflesecurity/trufflehog) for enterprise-grade secret detection
 - 🔗 **Link Detection**: Find and display URLs in commit messages
 - 📦 **Repository Context**: Shows if commits are in user's own repositories or forks
 ## Installation
@@ -66,7 +66,7 @@ gitslurp -t <github_token> <username>
 
 - `--token, -t`: GitHub personal access token (can also be set via `GITSLURP_GITHUB_TOKEN` environment variable)
 - `--details, -d`: Show detailed commit information
-- `--secrets, -s`: Enable secret detection in commits
+- `--secrets, -s`: Enable TruffleHog-powered secret detection in commits 🐽
 - `--links, -l`: Show URLs found in commit messages
 - `--all, -a`: Show commits from all contributors in the target's repositories. This is useful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities. Note: This flag is automatically enabled when scanning organizations.
 
