@@ -144,7 +144,7 @@ func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Re
 	bar := progressbar.NewOptions(len(repos),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
-		progressbar.OptionSetDescription("[cyan]Slurping repositories[reset]"),
+		progressbar.OptionSetDescription("[cyan]Sniffing repositories 🐽[reset]"),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
 			SaucerHead:    "[green]>[reset]",

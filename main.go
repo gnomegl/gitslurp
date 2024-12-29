@@ -338,12 +338,12 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 					if checkSecrets && len(commit.Secrets) > 0 {
 						if isTargetCommit {
-							color.HiRed("    ⚠️  Potential secrets found:")
+							color.HiRed("    🐽 Sniffed potential secrets:")
 							for _, secret := range commit.Secrets {
 								color.HiRed("      - %s", secret)
 							}
 						} else {
-							color.Red("    Potential secrets found:")
+							color.Red("    🐽 Sniffed potential secrets:")
 							for _, secret := range commit.Secrets {
 								color.Red("      - %s", secret)
 							}
@@ -398,7 +398,7 @@ func main() {
 			&cli.BoolFlag{
 				Name:    "secrets",
 				Aliases: []string{"s"},
-				Usage:   "Enable secret detection in commits",
+				Usage:   "Enable sniffing for secrets in commits 🐽",
 			},
 			&cli.BoolFlag{
 				Name:    "links",
