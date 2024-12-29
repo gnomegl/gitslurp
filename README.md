@@ -32,15 +32,13 @@ gitslurp soxoj
 ```
 
 ## Features
-
-- 🎯 **User-Centric Analysis**: Search by GitHub username or email address
-- ���� **Comprehensive Commit History**: View all commits made by a user across public repositories
-- 🎨 **Visual Highlighting**: Easily identify target user's commits with color-coding and emojis
-- 🔄 **Multiple Identity Support**: Detects and groups commits from different email addresses and names
-- 🔐 **Security Features**: Optional secret detection in commits
+- 🔍 **User-Centric Analysis**: Search by GitHub username or email address
+- 📊 **Comprehensive Commit History**: View all commits made by a user across public repositories
+- 🎯 **Visual Highlighting**: Easily identify target user's commits with color-coding and emojis
+- 👥 **Multiple Identity Support**: Detects and groups commits from different email addresses and names
+- 🔒 **Security Features**: Optional secret detection in commits
 - 🔗 **Link Detection**: Find and display URLs in commit messages
-- 🏗️ **Repository Context**: Shows if commits are in user's own repositories or forks
-
+- 📦 **Repository Context**: Shows if commits are in user's own repositories or forks
 ## Installation
 
 ```bash
