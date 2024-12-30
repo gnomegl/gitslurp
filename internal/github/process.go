@@ -76,10 +76,17 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 	sem := make(chan bool, cfg.MaxConcurrentRequests)
 	var wg sync.WaitGroup
 
+	var progressDescription string
+	if checkSecrets {
+		progressDescription = "[cyan]Sniffing repositories 🐽[reset]"
+	} else {
+		progressDescription = "[cyan]Slurping repositories[reset]"
+	}
+
 	bar := progressbar.NewOptions(len(repos),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
-		progressbar.OptionSetDescription("[cyan]Sniffing repositories 🐽[reset]"),
+		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
 			SaucerHead:    "[green]>[reset]",
