@@ -135,10 +135,12 @@ func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo,
 			continue
 		}
 		switch filename {
-		case "package.json", "package-lock.json", // npm
+		case "package.json", "package-lock.json", "npm-shrinkwrap.json", ".npmrc", // npm
 			"yarn.lock", ".yarnrc", ".yarnrc.yml", // yarn
-			"pnpm-lock.yaml", ".pnpmrc", // pnpm
-			"npm-shrinkwrap.json", ".npmrc": // npm
+			"pnpm-lock.yaml", ".pnpmrc": // pnpm
+			continue
+		}
+		if strings.HasSuffix(filename, ".lock") {
 			continue
 		}
 		if file.GetPatch() != "" {

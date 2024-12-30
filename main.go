@@ -47,7 +47,6 @@ func runApp(c *cli.Context) error {
 
 	showDetails := false
 	checkSecrets := false
-	showLinks := false
 	showTargetOnly := true
 	showInteresting := false
 	var target string
@@ -58,8 +57,6 @@ func runApp(c *cli.Context) error {
 			showDetails = true
 		case "-s", "--secrets":
 			checkSecrets = true
-		case "-l", "--links":
-			showLinks = true
 		case "-a", "--all":
 			showTargetOnly = false
 		case "-i", "--interesting":
@@ -186,12 +183,20 @@ func runApp(c *cli.Context) error {
 	}
 
 	// Process repos
-	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, showLinks, &cfg)
+	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, &cfg)
 
-	// Only process gists if we're checking for secrets or links
-	if len(gists) > 0 && (checkSecrets || showLinks) {
-		color.Blue("\nProcessing %d public gists for secrets and links...", len(gists))
-		gistEmails := github.ProcessGists(context.Background(), client, gists, checkSecrets, showLinks, &cfg)
+	// Process gists if we're checking secrets or interesting patterns
+	if len(gists) > 0 && (checkSecrets || cfg.ShowInteresting) {
+		var scanType string
+		if checkSecrets && cfg.ShowInteresting {
+			scanType = "secrets and patterns"
+		} else if checkSecrets {
+			scanType = "secrets"
+		} else {
+			scanType = "interesting patterns"
+		}
+		color.Blue("\nProcessing %d public gists for %s...", len(gists), scanType)
+		gistEmails := github.ProcessGists(context.Background(), client, gists, checkSecrets, &cfg)
 		// Merge gist emails with repo emails
 		for email, details := range gistEmails {
 			if existing, ok := emails[email]; ok {
@@ -221,7 +226,7 @@ func runApp(c *cli.Context) error {
 	time.Sleep(500 * time.Millisecond)
 	fmt.Println()
 
-	displayResults(emails, showDetails, checkSecrets, showLinks, lookupEmail, username, user, showTargetOnly, isOrg)
+	displayResults(emails, showDetails, checkSecrets, lookupEmail, username, user, showTargetOnly, isOrg, &cfg)
 	return nil
 }
 
@@ -229,7 +234,7 @@ func isUserIdentifier(identifier string, userIdentifiers map[string]bool) bool {
 	return userIdentifiers[identifier]
 }
 
-func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, showLinks bool, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool) {
+func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config) {
 	type emailEntry struct {
 		Email   string
 		Details *models.EmailDetails
@@ -303,9 +308,9 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			color.White("  Total Commits: %d", entry.Details.CommitCount)
 		}
 
-		if showDetails || checkSecrets || showLinks {
+		if showDetails || checkSecrets || cfg.ShowInteresting {
 			for repoName, commits := range entry.Details.Commits {
-				// only show repo header if we're showing details, have links, or have secrets in this repo
+				// only show repo header if we're showing details or have secrets/patterns in this repo
 				repoHasContent := false
 				if showDetails {
 					repoHasContent = true
@@ -313,7 +318,7 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 					// check if repo has any content worth showing
 					for _, commit := range commits {
 						if (checkSecrets && len(commit.Secrets) > 0) ||
-							(showLinks && len(commit.Links) > 0) {
+							(cfg.ShowInteresting && len(commit.Secrets) > 0) {
 							repoHasContent = true
 							break
 						}
@@ -333,7 +338,7 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 				for _, commit := range commits {
 					shouldShowCommit := showDetails ||
 						(checkSecrets && len(commit.Secrets) > 0) ||
-						(showLinks && len(commit.Links) > 0)
+						(cfg.ShowInteresting && len(commit.Secrets) > 0)
 
 					if !shouldShowCommit {
 						continue
@@ -341,8 +346,8 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 					isTargetCommit := isTargetUser || isUserIdentifier(commit.AuthorName, userIdentifiers) || isUserIdentifier(commit.AuthorEmail, userIdentifiers)
 
-					// only show commit details if showing details or if we found secrets/links
-					if showDetails || len(commit.Secrets) > 0 || len(commit.Links) > 0 {
+					// only show commit details if showing details or if we found secrets/patterns
+					if showDetails || len(commit.Secrets) > 0 {
 						if isTargetCommit {
 							color.HiMagenta("    ⭐ Commit: %s", commit.Hash)
 							color.HiBlue("    🔗 URL: %s", commit.URL)
@@ -361,30 +366,48 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 						}
 					}
 
-					if checkSecrets && len(commit.Secrets) > 0 {
+					if len(commit.Secrets) > 0 {
 						if isTargetCommit {
-							color.HiRed("    🐽 Sniffed potential secrets:")
+							var foundSecrets, foundPatterns bool
 							for _, secret := range commit.Secrets {
-								color.HiRed("      - %s", secret)
+								if strings.HasPrefix(secret, "⭐") {
+									if !foundPatterns && cfg.ShowInteresting {
+										color.HiYellow("    ⭐ Found patterns:")
+										foundPatterns = true
+									}
+									if cfg.ShowInteresting {
+										color.HiYellow("      %s", secret)
+									}
+								} else {
+									if !foundSecrets && checkSecrets {
+										color.HiRed("    🐽 Found secrets:")
+										foundSecrets = true
+									}
+									if checkSecrets {
+										color.HiRed("      - %s", secret)
+									}
+								}
 							}
 						} else {
-							color.Red("    🐽 Sniffed potential secrets:")
+							var foundSecrets, foundPatterns bool
 							for _, secret := range commit.Secrets {
-								color.Red("      - %s", secret)
-							}
-						}
-					}
-
-					if showLinks && len(commit.Links) > 0 {
-						if isTargetCommit {
-							color.HiBlue("    🔍 Links found:")
-							for _, link := range commit.Links {
-								color.HiBlue("      - %s", link)
-							}
-						} else {
-							color.Blue("    Links found:")
-							for _, link := range commit.Links {
-								color.Blue("      - %s", link)
+								if strings.HasPrefix(secret, "⭐") {
+									if !foundPatterns && cfg.ShowInteresting {
+										color.Yellow("    ⭐ Found patterns:")
+										foundPatterns = true
+									}
+									if cfg.ShowInteresting {
+										color.Yellow("      %s", secret)
+									}
+								} else {
+									if !foundSecrets && checkSecrets {
+										color.Red("    🐽 Found secrets:")
+										foundSecrets = true
+									}
+									if checkSecrets {
+										color.Red("      - %s", secret)
+									}
+								}
 							}
 						}
 					}
@@ -424,11 +447,6 @@ func main() {
 				Name:    "secrets",
 				Aliases: []string{"s"},
 				Usage:   "Enable sniffing for secrets in commits 🐽",
-			},
-			&cli.BoolFlag{
-				Name:    "links",
-				Aliases: []string{"l"},
-				Usage:   "Show URLs found in commit messages",
 			},
 			&cli.BoolFlag{
 				Name:    "all",
