@@ -149,14 +149,3 @@ func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo,
 
 	return content.String(), nil
 }
-
-// process a single repo
-func processRepoWorker(ctx context.Context, client *github.Client, repo *github.Repository, checkSecrets bool, findLinks bool, cfg *Config) ([]models.CommitInfo, error) {
-	var since *time.Time
-	if repo.GetFork() {
-		createdAt := repo.GetCreatedAt()
-		since = &createdAt.Time
-	}
-
-	return FetchCommits(ctx, client, repo.GetOwner().GetLogin(), repo.GetName(), repo.GetFork(), since, checkSecrets, findLinks, cfg)
-}
