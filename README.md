@@ -32,13 +32,14 @@ gitslurp soxoj
 ```
 
 ## Features
-- 🔍 **User-Centric Analysis**: Search by GitHub username or email address
+- 🔍 **User-Centric Analysis**: Search by GitHub username, email address or organization
 - 📊 **Comprehensive Commit History**: View all commits made by a user across public repositories
 - 🎯 **Visual Highlighting**: Easily identify target user's commits with color-coding and emojis
 - 👥 **Multiple Identity Support**: Detects and groups commits from different email addresses and names
 - 🐽 **Advanced Secret Detection**: Powered by [TruffleHog](https://github.com/trufflesecurity/trufflehog) regex patterns for enterprise-grade secret detection
 - ⭐ **Interesting Patterns**: Find URLs, UUIDs, IPs, and other interesting patterns in commit messages
 - 📦 **Repository Context**: Shows if commits are in user's own repositories or forks
+- 🏢 **Organization Scanning**: Scan entire organizations to identify employees and their commit patterns
 ## Installation
 
 ```bash
