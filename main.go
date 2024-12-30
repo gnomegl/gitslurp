@@ -49,6 +49,7 @@ func runApp(c *cli.Context) error {
 	checkSecrets := false
 	showLinks := false
 	showTargetOnly := true
+	showInteresting := false
 	var target string
 
 	for _, arg := range allArgs {
@@ -61,6 +62,8 @@ func runApp(c *cli.Context) error {
 			showLinks = true
 		case "-a", "--all":
 			showTargetOnly = false
+		case "-i", "--interesting":
+			showInteresting = true
 		default:
 			if !strings.HasPrefix(arg, "-") {
 				target = arg
@@ -77,6 +80,7 @@ func runApp(c *cli.Context) error {
 	checkLatestVersion(context.Background(), client)
 
 	cfg := github.DefaultConfig()
+	cfg.ShowInteresting = showInteresting
 	input := target
 
 	if token != "" {
@@ -150,18 +154,17 @@ func runApp(c *cli.Context) error {
 
 	var repos []*gh.Repository
 	var gists []*gh.Gist
-
 	if isOrg {
-		repos, err = github.FetchOrgRepos(context.Background(), client, username, cfg)
+		repos, err = github.FetchOrgRepos(context.Background(), client, username, &cfg)
 	} else {
-		repos, err = github.FetchRepos(context.Background(), client, username, cfg)
+		repos, err = github.FetchRepos(context.Background(), client, username, &cfg)
 		if err != nil {
 			color.Red("❌ Error: %v", err)
 			return nil
 		}
 
 		// Only fetch gists for users, not organizations
-		gists, err = github.FetchGists(context.Background(), client, username, cfg)
+		gists, err = github.FetchGists(context.Background(), client, username, &cfg)
 		if err != nil {
 			// We only warn for gist errors since they're not critical
 			color.Yellow("⚠️  Warning: Could not fetch gists: %v", err)
@@ -183,12 +186,12 @@ func runApp(c *cli.Context) error {
 	}
 
 	// Process repos
-	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, showLinks, cfg)
+	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, showLinks, &cfg)
 
 	// Only process gists if we're checking for secrets or links
 	if len(gists) > 0 && (checkSecrets || showLinks) {
 		color.Blue("\nProcessing %d public gists for secrets and links...", len(gists))
-		gistEmails := github.ProcessGists(context.Background(), client, gists, checkSecrets, showLinks, cfg)
+		gistEmails := github.ProcessGists(context.Background(), client, gists, checkSecrets, showLinks, &cfg)
 		// Merge gist emails with repo emails
 		for email, details := range gistEmails {
 			if existing, ok := emails[email]; ok {
@@ -431,6 +434,11 @@ func main() {
 				Name:    "all",
 				Aliases: []string{"a"},
 				Usage:   "Show commits from all contributors in the target's repositories",
+			},
+			&cli.BoolFlag{
+				Name:    "interesting",
+				Aliases: []string{"i"},
+				Usage:   "Get interesting strings ⭐",
 			},
 		},
 		Action:    runApp,

@@ -1,36 +1,67 @@
 package scanner
 
 import (
-	"context"
-	"strings"
-
-	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
-	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+	"regexp"
 )
 
-func CheckForSecrets(content string) []string {
-	var secrets []string
-	ctx := context.Background()
+type PatternGroup struct {
+	Name        string
+	Description string
+	Patterns    []string
+}
 
-	allDetectors := detectors.AllDetectors(ctx)
+type Scanner struct {
+	showInteresting bool
+}
 
-	for _, detector := range allDetectors {
-		if detector.Type() == detectorspb.DetectorType_Network {
-			continue
+func NewScanner(showInteresting bool) *Scanner {
+	return &Scanner{
+		showInteresting: showInteresting,
+	}
+}
+
+func (s *Scanner) ScanText(text string) []Match {
+	var matches []Match
+
+	for name, pattern := range SecretPatterns {
+		re := regexp.MustCompile(pattern)
+		found := re.FindAllString(text, -1)
+		for _, match := range found {
+			matches = append(matches, Match{
+				Type:  "Secret",
+				Name:  name,
+				Value: match,
+			})
 		}
+	}
 
-		results, err := detector.FromData(ctx, []byte(content))
-		if err != nil {
-			continue
-		}
-
-		for _, result := range results {
-			secret := strings.TrimSpace(result.Raw)
-			if secret != "" {
-				secrets = append(secrets, result.DetectorType.String()+": "+secret)
+	if s.showInteresting {
+		for _, pattern := range InterestingStrings {
+			re := regexp.MustCompile(pattern)
+			found := re.FindAllString(text, -1)
+			for _, match := range found {
+				matches = append(matches, Match{
+					Type:  "Interesting",
+					Name:  "Interesting String",
+					Value: match,
+				})
 			}
 		}
 	}
 
-	return secrets
+	return matches
+}
+
+type Match struct {
+	Type  string // "Secret" or "Interesting"
+	Name  string // Pattern name
+	Value string // The actual matched string
+}
+
+func (m *Match) Validate() bool {
+	if _, ok := ValidationRules[m.Name]; !ok {
+		return true // No validation rules defined
+	}
+
+	return true
 }
