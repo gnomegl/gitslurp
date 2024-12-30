@@ -1,38 +1,77 @@
 package scanner
 
 import (
-	"context"
-	"strings"
-
-	"github.com/trufflesecurity/trufflehog/v3/pkg/detectors"
-	"github.com/trufflesecurity/trufflehog/v3/pkg/pb/detectorspb"
+	"regexp"
 )
 
-func CheckForSecrets(content string) []string {
-	var secrets []string
-	ctx := context.Background()
+// PatternGroup represents a group of regex patterns with a name and description
+type PatternGroup struct {
+	Name        string
+	Description string
+	Patterns    []string
+}
 
-	allDetectors := detectors.AllDetectors(ctx)
+// Scanner handles secret and interesting string detection
+type Scanner struct {
+	showInteresting bool
+}
 
-	for _, detector := range allDetectors {
-		// skip detectors that require verification (this is for static analysis anyway)
-		if detector.Type() == detectorspb.DetectorType_Network {
-			continue
+// NewScanner creates a new scanner instance
+func NewScanner(showInteresting bool) *Scanner {
+	return &Scanner{
+		showInteresting: showInteresting,
+	}
+}
+
+// ScanText scans the given text for secrets and interesting strings
+func (s *Scanner) ScanText(text string) []Match {
+	var matches []Match
+
+	// Scan for secrets
+	for name, pattern := range SecretPatterns {
+		re := regexp.MustCompile(pattern)
+		found := re.FindAllString(text, -1)
+		for _, match := range found {
+			matches = append(matches, Match{
+				Type:  "Secret",
+				Name:  name,
+				Value: match,
+			})
 		}
+	}
 
-		results, err := detector.FromData(ctx, []byte(content))
-		if err != nil {
-			continue
-		}
-
-		for _, result := range results {
-			// formatting the secret output
-			secret := strings.TrimSpace(result.Raw)
-			if secret != "" {
-				secrets = append(secrets, result.DetectorType.String()+": "+secret)
+	// If interesting strings are enabled, scan for those too
+	if s.showInteresting {
+		for _, pattern := range InterestingStrings {
+			re := regexp.MustCompile(pattern)
+			found := re.FindAllString(text, -1)
+			for _, match := range found {
+				matches = append(matches, Match{
+					Type:  "Interesting",
+					Name:  "Interesting String",
+					Value: match,
+				})
 			}
 		}
 	}
 
-	return secrets
+	return matches
+}
+
+// Match represents a found secret or interesting string
+type Match struct {
+	Type  string // "Secret" or "Interesting"
+	Name  string // Pattern name
+	Value string // The actual matched string
+}
+
+// Validate checks if a match meets its validation rules
+func (m *Match) Validate() bool {
+	if _, ok := ValidationRules[m.Name]; !ok {
+		return true // No validation rules defined
+	}
+
+	// TODO: Implement actual validation logic based on rules
+	// For now, we just return true
+	return true
 }

@@ -4,33 +4,18 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gnomegl/gitslurp/internal/models"
 	"github.com/gnomegl/gitslurp/internal/scanner"
 
 	"github.com/google/go-github/v57/github"
-	"github.com/schollz/progressbar/v3"
 )
-
-type Config struct {
-	MaxConcurrentRequests int
-	PerPage               int
-	SkipNodeModules       bool
-}
-
-func DefaultConfig() *Config {
-	return &Config{
-		MaxConcurrentRequests: 5,
-		PerPage:               100,
-		SkipNodeModules:       true,
-	}
-}
 
 func FetchRepos(ctx context.Context, client *github.Client, username string, cfg *Config) ([]*github.Repository, error) {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = &Config{} // sneed why can't i do cfg = &DefaultConfig()
+		*cfg = DefaultConfig()
 	}
 
 	var allRepos []*github.Repository
@@ -55,7 +40,8 @@ func FetchRepos(ctx context.Context, client *github.Client, username string, cfg
 
 func FetchCommits(ctx context.Context, client *github.Client, owner, repo string, isFork bool, since *time.Time, checkSecrets bool, findLinks bool, cfg *Config) ([]models.CommitInfo, error) {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = &Config{}
+		*cfg = DefaultConfig()
 	}
 
 	var allCommits []models.CommitInfo
@@ -99,7 +85,15 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 				content, err := fetchCommitContent(ctx, client, owner, repo, commit.GetSHA(), cfg)
 				if err == nil {
 					if checkSecrets {
-						commitInfo.Secrets = scanner.CheckForSecrets(content)
+						secretScanner := scanner.NewScanner(cfg.ShowInteresting)
+						matches := secretScanner.ScanText(content)
+						for _, match := range matches {
+							if match.Type == "Secret" {
+								commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s", match.Name, match.Value))
+							} else if match.Type == "Interesting" {
+								commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s", match.Name, match.Value))
+							}
+						}
 					}
 					if findLinks {
 						commitInfo.Links = scanner.ExtractLinks(content)
@@ -119,91 +113,11 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 	return allCommits, nil
 }
 
-// process a single repo
-func processRepoWorker(ctx context.Context, client *github.Client, repo *github.Repository, checkSecrets bool, findLinks bool, cfg *Config) ([]models.CommitInfo, error) {
-	var since *time.Time
-	if repo.GetFork() {
-		createdAt := repo.GetCreatedAt()
-		since = &createdAt.Time
-	}
-
-	return FetchCommits(ctx, client, repo.GetOwner().GetLogin(), repo.GetName(), repo.GetFork(), since, checkSecrets, findLinks, cfg)
-}
-
-// based: concurrent repo processing with rate limiting
-func ProcessRepos(ctx context.Context, client *github.Client, repos []*github.Repository, checkSecrets bool, findLinks bool, cfg *Config) map[string]*models.EmailDetails {
-	if cfg == nil {
-		cfg = DefaultConfig()
-	}
-
-	emails := make(map[string]*models.EmailDetails)
-	var mutex sync.Mutex
-	sem := make(chan bool, cfg.MaxConcurrentRequests)
-	var wg sync.WaitGroup
-
-	bar := progressbar.NewOptions(len(repos),
-		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionShowCount(),
-		progressbar.OptionSetDescription("[cyan]Sniffing repositories 🐽[reset]"),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]=[reset]",
-			SaucerHead:    "[green]>[reset]",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}))
-
-	for _, repo := range repos {
-		wg.Add(1)
-		go func(repo *github.Repository) {
-			defer wg.Done()
-			sem <- true
-			defer func() { <-sem }()
-
-			commits, err := processRepoWorker(ctx, client, repo, checkSecrets, findLinks, cfg)
-			if err != nil {
-				return
-			}
-
-			mutex.Lock()
-			aggregateCommits(emails, commits, *repo.Name)
-			mutex.Unlock()
-
-			bar.Add(1)
-		}(repo)
-	}
-
-	wg.Wait()
-	bar.Finish()
-	return emails
-}
-
-// email -> commit mapping
-func aggregateCommits(emails map[string]*models.EmailDetails, commits []models.CommitInfo, repoName string) {
-	for _, commit := range commits {
-		if commit.AuthorEmail == "" {
-			continue
-		}
-
-		email := commit.AuthorEmail
-		if _, exists := emails[email]; !exists {
-			emails[email] = &models.EmailDetails{
-				Names:   make(map[string]struct{}),
-				Commits: make(map[string][]models.CommitInfo),
-			}
-		}
-
-		details := emails[email]
-		details.Names[commit.AuthorName] = struct{}{}
-		details.Commits[repoName] = append(details.Commits[repoName], commit)
-		details.CommitCount++
-	}
-}
-
 // get commit content
 func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo, sha string, cfg *Config) (string, error) {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = &Config{}
+		*cfg = DefaultConfig()
 	}
 
 	commit, _, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
@@ -234,4 +148,15 @@ func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo,
 	}
 
 	return content.String(), nil
+}
+
+// process a single repo
+func processRepoWorker(ctx context.Context, client *github.Client, repo *github.Repository, checkSecrets bool, findLinks bool, cfg *Config) ([]models.CommitInfo, error) {
+	var since *time.Time
+	if repo.GetFork() {
+		createdAt := repo.GetCreatedAt()
+		since = &createdAt.Time
+	}
+
+	return FetchCommits(ctx, client, repo.GetOwner().GetLogin(), repo.GetName(), repo.GetFork(), since, checkSecrets, findLinks, cfg)
 }
