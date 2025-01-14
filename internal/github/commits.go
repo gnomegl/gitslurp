@@ -21,7 +21,7 @@ func FetchRepos(ctx context.Context, client *github.Client, username string, cfg
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByUserOptions{
 		ListOptions: github.ListOptions{PerPage: cfg.PerPage},
-		Type:        "public",
+		Type:        "all",
 	}
 
 	for {
@@ -56,7 +56,6 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 		commits, resp, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 409 {
-				// Repository is empty or in an invalid state
 				return nil, fmt.Errorf("repository is empty or not accessible")
 			}
 			if resp != nil && resp.StatusCode == 404 {
@@ -65,38 +64,59 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 			return nil, fmt.Errorf("error fetching commits: %v", err)
 		}
 
-		for _, commit := range commits {
-			if commit.Commit == nil || commit.Commit.Author == nil {
+		for _, c := range commits {
+			if c.GetCommit() == nil || c.GetCommit().GetAuthor() == nil {
 				continue
 			}
 
 			commitInfo := models.CommitInfo{
-				Hash:        commit.GetSHA(),
-				URL:         commit.GetHTMLURL(),
-				AuthorName:  commit.Commit.Author.GetName(),
-				AuthorEmail: commit.Commit.Author.GetEmail(),
-				Message:     commit.Commit.GetMessage(),
-				Date:        commit.Commit.Author.GetDate().Time,
-				RepoName:    repo,
+				Hash:        c.GetSHA(),
+				URL:         c.GetHTMLURL(),
+				AuthorName:  c.GetCommit().GetAuthor().GetName(),
+				AuthorEmail: c.GetCommit().GetAuthor().GetEmail(),
+				Message:     c.GetCommit().GetMessage(),
+				IsOwnRepo:   !isFork,
 				IsFork:      isFork,
+				RepoName:    repo,
 			}
 
-			if checkSecrets || findLinks {
-				content, err := fetchCommitContent(ctx, client, owner, repo, commit.GetSHA(), cfg)
+			if c.GetCommit().GetAuthor() != nil {
+				commitInfo.AuthorDate = c.GetCommit().GetAuthor().GetDate().Time
+			}
+
+			if c.GetCommit().GetCommitter() != nil {
+				commitInfo.CommitterName = c.GetCommit().GetCommitter().GetName()
+				commitInfo.CommitterEmail = c.GetCommit().GetCommitter().GetEmail()
+				commitInfo.CommitterDate = c.GetCommit().GetCommitter().GetDate().Time
+			}
+
+			// Handle anonymous commits
+			if commitInfo.AuthorEmail == "" && commitInfo.CommitterEmail == "" {
+				commitInfo.AuthorName = "🥷 Anonymous"
+				commitInfo.AuthorEmail = ""
+				if commitInfo.CommitterName == "" {
+					commitInfo.CommitterName = "🥷 Anonymous"
+				}
+				if commitInfo.CommitterEmail == "" {
+					commitInfo.CommitterEmail = ""
+				}
+			}
+
+			if findLinks {
+				commitInfo.Links = scanner.ExtractLinks(commitInfo.Message)
+			}
+
+			if checkSecrets {
+				content, err := fetchCommitContent(ctx, client, owner, repo, c.GetSHA(), cfg)
 				if err == nil {
-					if checkSecrets {
-						secretScanner := scanner.NewScanner(cfg.ShowInteresting)
-						matches := secretScanner.ScanText(content)
-						for _, match := range matches {
-							if match.Type == "Secret" {
-								commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s", match.Name, match.Value))
-							} else if match.Type == "Interesting" {
-								commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s", match.Name, match.Value))
-							}
+					secretScanner := scanner.NewScanner(cfg.ShowInteresting)
+					matches := secretScanner.ScanText(content)
+					for _, match := range matches {
+						if match.Type == "Secret" {
+							commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s", match.Name, match.Value))
+						} else if match.Type == "Interesting" {
+							commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s", match.Name, match.Value))
 						}
-					}
-					if findLinks {
-						commitInfo.Links = scanner.ExtractLinks(content)
 					}
 				}
 			}
@@ -125,7 +145,7 @@ func fetchCommitContent(ctx context.Context, client *github.Client, owner, repo,
 		return "", fmt.Errorf("failed to fetch commit %s: %w", sha, err)
 	}
 	var content strings.Builder
-	content.WriteString(commit.Commit.GetMessage())
+	content.WriteString(commit.GetCommit().GetMessage())
 	content.WriteString("\n")
 
 	for _, file := range commit.Files {

@@ -13,62 +13,63 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-// ProcessCommit processes a single commit for secrets and links
 func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) models.CommitInfo {
-	commitInfo := models.CommitInfo{
-		Hash:        commit.GetSHA(),
-		URL:         commit.GetHTMLURL(),
-		AuthorName:  commit.GetCommit().GetAuthor().GetName(),
-		AuthorEmail: commit.GetCommit().GetAuthor().GetEmail(),
-	}
+	var info models.CommitInfo
 
-	// Create scanner if we're checking secrets or interesting patterns
-	if checkSecrets || cfg.ShowInteresting {
-		secretScanner := scanner.NewScanner(cfg.ShowInteresting)
+	if commit.Commit != nil {
+		info.Message = commit.Commit.GetMessage()
+		info.Hash = commit.GetSHA()
+		info.URL = commit.GetHTMLURL()
 
-		// Scan commit message
-		message := commit.GetCommit().GetMessage()
-		if matches := secretScanner.ScanText(message); len(matches) > 0 {
-			for _, match := range matches {
-				if match.Type == "Secret" && checkSecrets {
-					commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s", match.Name, match.Value))
-				} else if match.Type == "Interesting" && cfg.ShowInteresting {
-					commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s", match.Name, match.Value))
-				}
+		if commit.Commit.Author != nil {
+			info.AuthorName = commit.Commit.Author.GetName()
+			info.AuthorEmail = commit.Commit.Author.GetEmail()
+			info.AuthorDate = commit.Commit.Author.GetDate().Time
+		}
+
+		if commit.Commit.Committer != nil {
+			info.CommitterName = commit.Commit.Committer.GetName()
+			info.CommitterEmail = commit.Commit.Committer.GetEmail()
+			info.CommitterDate = commit.Commit.Committer.GetDate().Time
+		}
+
+		if info.AuthorEmail == "" && info.CommitterEmail == "" {
+			info.AuthorName = "🥷 Anonymous"
+			info.AuthorEmail = ""
+			if info.CommitterName == "" {
+				info.CommitterName = "🥷 Anonymous"
+			}
+			if info.CommitterEmail == "" {
+				info.CommitterEmail = ""
 			}
 		}
 
-		// Also scan the files changed in the commit
-		for _, file := range commit.Files {
-			filename := file.GetFilename()
-			// Skip node_modules
-			if cfg.SkipNodeModules && (strings.Contains(filename, "/node_modules/") || strings.HasPrefix(filename, "node_modules/")) {
-				continue
-			}
-			// Skip package manager files
-			switch filename {
-			case "package.json", "package-lock.json", // npm
-				"yarn.lock", ".yarnrc", ".yarnrc.yml", // yarn
-				"pnpm-lock.yaml", ".pnpmrc", // pnpm
-				"npm-shrinkwrap.json", ".npmrc": // npm
-				continue
-			}
+		if checkSecrets || cfg.ShowInteresting {
+			secretScanner := scanner.NewScanner(cfg.ShowInteresting)
 
-			if file.GetPatch() != "" {
-				if matches := secretScanner.ScanText(file.GetPatch()); len(matches) > 0 {
-					for _, match := range matches {
-						if match.Type == "Secret" && checkSecrets {
-							commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s (in %s)", match.Name, match.Value, file.GetFilename()))
-						} else if match.Type == "Interesting" && cfg.ShowInteresting {
-							commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s (in %s)", match.Name, match.Value, file.GetFilename()))
-						}
-					}
+			// Scan commit message
+			message := commit.GetCommit().GetMessage()
+			info.Secrets = append(info.Secrets, scanContent(secretScanner, message, "commit message", checkSecrets, cfg.ShowInteresting)...)
+
+			// Scan files changed in the commit
+			for _, file := range commit.Files {
+				filename := file.GetFilename()
+				// Skip node_modules and package manager files
+				if cfg.SkipNodeModules && (strings.Contains(filename, "/node_modules/") || strings.HasPrefix(filename, "node_modules/") || filename == "Cargo.lock") {
+					continue
+				}
+				if isPackageManagerFile(filename) {
+					continue
+				}
+
+				if file.GetPatch() != "" {
+					info.Secrets = append(info.Secrets, scanContent(secretScanner, file.GetPatch(), filename, checkSecrets, cfg.ShowInteresting)...)
 				}
 			}
 		}
 	}
 
-	return commitInfo
+	return info
 }
 
 // ExtractLinks extracts URLs from text
@@ -160,6 +161,21 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 	return emails
 }
 
+// scanContent scans text for secrets and interesting patterns
+func scanContent(scanner *scanner.Scanner, text, location string, checkSecrets bool, showInteresting bool) []string {
+	var findings []string
+	if matches := scanner.ScanText(text); len(matches) > 0 {
+		for _, match := range matches {
+			if match.Type == "Secret" && checkSecrets {
+				findings = append(findings, fmt.Sprintf("%s: %s (in %s)", match.Name, match.Value, location))
+			} else if match.Type == "Interesting" && showInteresting {
+				findings = append(findings, fmt.Sprintf("⭐ %s: %s (in %s)", match.Name, match.Value, location))
+			}
+		}
+	}
+	return findings
+}
+
 // ProcessGists processes gists for commit information
 func ProcessGists(ctx context.Context, client *gh.Client, gists []*gh.Gist, checkSecrets bool, cfg *Config) map[string]*models.EmailDetails {
 	emails := make(map[string]*models.EmailDetails)
@@ -180,41 +196,20 @@ func ProcessGists(ctx context.Context, client *gh.Client, gists []*gh.Gist, chec
 			secretScanner := scanner.NewScanner(cfg.ShowInteresting)
 
 			// Scan gist description
-			if matches := secretScanner.ScanText(gist.GetDescription()); len(matches) > 0 {
-				for _, match := range matches {
-					if match.Type == "Secret" && checkSecrets {
-						commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s (in description)", match.Name, match.Value))
-					} else if match.Type == "Interesting" && cfg.ShowInteresting {
-						commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s (in description)", match.Name, match.Value))
-					}
-				}
-			}
+			commitInfo.Secrets = append(commitInfo.Secrets, scanContent(secretScanner, gist.GetDescription(), "description", checkSecrets, cfg.ShowInteresting)...)
 
 			// Scan each file's content
 			for filename, file := range gist.Files {
-				// Skip node_modules
+				// Skip node_modules and package manager files
 				if cfg.SkipNodeModules && (strings.Contains(string(filename), "/node_modules/") || strings.HasPrefix(string(filename), "node_modules/")) {
 					continue
 				}
-				// Skip package manager files
-				switch filename {
-				case "package.json", "package-lock.json", // npm
-					"yarn.lock", ".yarnrc", ".yarnrc.yml", // yarn
-					"pnpm-lock.yaml", ".pnpmrc", // pnpm
-					"npm-shrinkwrap.json", ".npmrc": // npm
+				if isPackageManagerFile(string(filename)) {
 					continue
 				}
 
 				if content := file.GetContent(); content != "" {
-					if matches := secretScanner.ScanText(content); len(matches) > 0 {
-						for _, match := range matches {
-							if match.Type == "Secret" && checkSecrets {
-								commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s (in %s)", match.Name, match.Value, filename))
-							} else if match.Type == "Interesting" && cfg.ShowInteresting {
-								commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s (in %s)", match.Name, match.Value, filename))
-							}
-						}
-					}
+					commitInfo.Secrets = append(commitInfo.Secrets, scanContent(secretScanner, content, string(filename), checkSecrets, cfg.ShowInteresting)...)
 				}
 			}
 		}
@@ -239,6 +234,32 @@ func ProcessGists(ctx context.Context, client *gh.Client, gists []*gh.Gist, chec
 	}
 
 	return emails
+}
+
+// isPackageManagerFile returns true if the filename is a package manager file
+func isPackageManagerFile(filename string) bool {
+	packageFiles := []string{
+		"package.json", "package-lock.json", // npm
+		"yarn.lock", ".yarnrc", ".yarnrc.yml", // yarn
+		"pnpm-lock.yaml", ".pnpmrc", // pnpm
+		"npm-shrinkwrap.json", ".npmrc", // npm
+		"composer.json", "composer.lock", // php
+		"Gemfile", "Gemfile.lock", // ruby
+		"requirements.txt", "poetry.lock", "Pipfile", "Pipfile.lock", // python
+		"go.mod", "go.sum", // golang
+		"build.gradle", "gradle.properties", "settings.gradle", // gradle
+		"pom.xml", "build.xml", // maven
+		"mix.exs", "mix.lock", // elixir
+		"sbt.build", "build.sbt", // scala
+		"cargo.toml", "cargo.lock", // rust
+	}
+	
+	for _, file := range packageFiles {
+		if filename == file {
+			return true
+		}
+	}
+	return false
 }
 
 // email -> commit mapping

@@ -3,17 +3,20 @@ package models
 import "time"
 
 type CommitInfo struct {
-	Hash        string
-	URL         string
-	AuthorName  string
-	AuthorEmail string
-	Message     string
-	Date        time.Time
-	RepoName    string
-	IsFork      bool
-	Secrets     []string
-	Links       []string
-	IsOwnRepo   bool
+	Hash          string
+	URL           string
+	AuthorName    string
+	AuthorEmail   string
+	AuthorDate    time.Time
+	CommitterName  string
+	CommitterEmail string
+	CommitterDate  time.Time
+	Message       string
+	Secrets       []string
+	Links         []string
+	IsOwnRepo     bool
+	IsFork        bool
+	RepoName      string
 }
 
 type EmailDetails struct {
