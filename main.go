@@ -7,15 +7,15 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/fatih/color"
 	"github.com/gnomegl/gitslurp/internal/art"
+	gh "github.com/google/go-github/v57/github"
+	"github.com/urfave/cli/v2"
+
 	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/models"
 	"github.com/gnomegl/gitslurp/internal/utils"
-	gh "github.com/google/go-github/v57/github"
-	"github.com/urfave/cli/v2"
 )
 
 const helpTemplate = `{{.Name}} - {{.Usage}}
@@ -182,10 +182,95 @@ func runApp(c *cli.Context) error {
 		return nil
 	}
 
-	// Process repos
+	// Event tracking flags
+	showWatchEvents := c.Bool("show-watchers")
+	showForkEvents := c.Bool("show-forkers")
+
+	watchers := make(map[string]struct{}) // Using map to deduplicate
+	forkers := make(map[string]struct{})
+
+	opts := &gh.ListOptions{
+		PerPage: 100, // Get maximum items per page
+	}
+
+	// collect watchers and forkers for each repository
+	for _, repo := range repos {
+		if showWatchEvents {
+			stargazers, _, err := client.Activity.ListStargazers(context.Background(), repo.GetOwner().GetLogin(), repo.GetName(), opts)
+			if err != nil {
+				color.Yellow("⚠️  Warning: Could not fetch stargazers for %s: %v", repo.GetFullName(), err)
+				continue
+			}
+			for _, stargazer := range stargazers {
+				watchers[stargazer.User.GetLogin()] = struct{}{}
+			}
+		}
+
+		if showForkEvents {
+			forks, _, err := client.Repositories.ListForks(context.Background(), repo.GetOwner().GetLogin(), repo.GetName(), &gh.RepositoryListForksOptions{
+				ListOptions: *opts,
+			})
+			if err != nil {
+				color.Yellow("⚠️  Warning: Could not fetch forks for %s: %v", repo.GetFullName(), err)
+				continue
+			}
+			for _, fork := range forks {
+				forkers[fork.GetOwner().GetLogin()] = struct{}{}
+			}
+		}
+	}
+
+	// use sorted slices 
+	var watchersList []string
+	for watcher := range watchers {
+		watchersList = append(watchersList, watcher)
+	}
+	sort.Strings(watchersList)
+
+	var forkersList []string
+	for forker := range forkers {
+		forkersList = append(forkersList, forker)
+	}
+	sort.Strings(forkersList)
+
+	if showForkEvents {
+		if len(forkersList) > 50 {
+			forkersFile := "forkers.txt"
+			content := strings.Join(forkersList, "\n")
+			if err := os.WriteFile(forkersFile, []byte(content), 0644); err != nil {
+				return fmt.Errorf("failed to write forkers file: %v", err)
+			}
+			fmt.Printf("\nForkers list exceeds 50 entries, written to %s\n", forkersFile)
+		} else if len(forkersList) > 0 {
+			fmt.Println("\nRepository Forkers:")
+			for _, forker := range forkersList {
+				fmt.Printf("🔱 %s\n", forker)
+			}
+		} else {
+			fmt.Println("\nNo forks found")
+		}
+	}
+
+	if showWatchEvents {
+		if len(watchersList) > 50 {
+			watchersFile := "watchers.txt"
+			content := strings.Join(watchersList, "\n")
+			if err := os.WriteFile(watchersFile, []byte(content), 0644); err != nil {
+				return fmt.Errorf("failed to write watchers file: %v", err)
+			}
+			fmt.Printf("\nWatchers list exceeds 50 entries, written to %s\n", watchersFile)
+		} else if len(watchersList) > 0 {
+			fmt.Println("\nRepository Watchers:")
+			for _, watcher := range watchersList {
+				fmt.Printf("👁️  %s\n", watcher)
+			}
+		} else {
+			fmt.Println("\nNo watchers found")
+		}
+	}
+
 	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, &cfg)
 
-	// Process gists if we're checking secrets or interesting patterns
 	if len(gists) > 0 && (checkSecrets || cfg.ShowInteresting) {
 		var scanType string
 		if checkSecrets && cfg.ShowInteresting {
@@ -197,8 +282,8 @@ func runApp(c *cli.Context) error {
 		}
 		color.Blue("\nProcessing %d public gists for %s...", len(gists), scanType)
 		gistEmails := github.ProcessGists(context.Background(), client, gists, checkSecrets, &cfg)
-		// Merge gist emails with repo emails
-		for email, details := range gistEmails {
+		
+    for email, details := range gistEmails {
 			if existing, ok := emails[email]; ok {
 				// Merge names
 				for name := range details.Names {
@@ -217,16 +302,18 @@ func runApp(c *cli.Context) error {
 
 	if len(emails) == 0 {
 		if isOrg {
-			return fmt.Errorf("no commits found for organization: %s", username)
+			if len(repos) > 0 {
+				color.Yellow("\n⚔️  All commits in this organization's repositories are anonymous")
+			} else {
+				return fmt.Errorf("no repositories found for organization: %s", username)
+			}
+		} else {
+			return fmt.Errorf("no commits or gists found for user: %s", username)
 		}
-		return fmt.Errorf("no commits or gists found for user: %s", username)
+	} else {
+		displayResults(emails, showDetails, checkSecrets, lookupEmail, username, user, showTargetOnly, isOrg, &cfg)
 	}
 
-	// sneed: progress bar needs artificial delay to avoid race condition
-	time.Sleep(500 * time.Millisecond)
-	fmt.Println()
-
-	displayResults(emails, showDetails, checkSecrets, lookupEmail, username, user, showTargetOnly, isOrg, &cfg)
 	return nil
 }
 
@@ -298,6 +385,14 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			}
 			color.HiGreen("  ✓ Names used: %s", strings.Join(names, ", "))
 			color.HiGreen("  ✓ Total Commits: %d", entry.Details.CommitCount)
+		} else if !showTargetOnly && isUserIdentifier(entry.Email, userIdentifiers) {
+			color.HiYellow(entry.Email)
+			names := make([]string, 0, len(entry.Details.Names))
+			for name := range entry.Details.Names {
+				names = append(names, name)
+			}
+			color.HiWhite("  Names: %s", strings.Join(names, ", "))
+			color.HiWhite("  Total Commits: %d", entry.Details.CommitCount)
 		} else {
 			color.Yellow(entry.Email)
 			names := make([]string, 0, len(entry.Details.Names))
@@ -331,6 +426,8 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 				if isTargetUser {
 					color.HiGreen("  📂 Repo: %s", repoName)
+				} else if !showTargetOnly && isUserIdentifier(entry.Email, userIdentifiers) {
+					color.HiWhite("  📂 Repo: %s", repoName)
 				} else {
 					color.Green("  Repo: %s", repoName)
 				}
@@ -349,13 +446,41 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 					// only show commit details if showing details or if we found secrets/patterns
 					if showDetails || len(commit.Secrets) > 0 {
 						if isTargetCommit {
-							color.HiMagenta("    ⭐ Commit: %s", commit.Hash)
+							if commit.AuthorName == "" {
+								color.HiMagenta("    ⚔️ Commit: %s", commit.Hash)
+							} else {
+								color.HiMagenta("    ⭐ Commit: %s", commit.Hash)
+							}
 							color.HiBlue("    🔗 URL: %s", commit.URL)
-							color.HiWhite("    👤 Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+							if commit.AuthorName == "" {
+								color.HiWhite("    👻 Author: anonymous")
+							} else {
+								color.HiWhite("    👤 Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+							}
+						} else if !showTargetOnly && isUserIdentifier(entry.Email, userIdentifiers) {
+							if commit.AuthorName == "" {
+								color.Magenta("    ⚔️ Commit: %s", commit.Hash)
+							} else {
+								color.Magenta("    ⭐ Commit: %s", commit.Hash)
+							}
+							color.Blue("    🔗 URL: %s", commit.URL)
+							if commit.AuthorName == "" {
+								color.White("    👻 Author: anonymous")
+							} else {
+								color.White("    👤 Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+							}
 						} else {
-							color.Magenta("    Commit: %s", commit.Hash)
+							if commit.AuthorName == "" {
+								color.Magenta("    ⚔️ Commit: %s", commit.Hash)
+							} else {
+								color.Magenta("    Commit: %s", commit.Hash)
+							}
 							color.Blue("    URL: %s", commit.URL)
-							color.White("    Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+							if commit.AuthorName == "" {
+								color.White("    👻 Author: anonymous")
+							} else {
+								color.White("    Author: %s <%s>", commit.AuthorName, commit.AuthorEmail)
+							}
 						}
 
 						if commit.IsOwnRepo {
@@ -385,6 +510,27 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 									}
 									if checkSecrets {
 										color.HiRed("      - %s", secret)
+									}
+								}
+							}
+						} else if !showTargetOnly && isUserIdentifier(entry.Email, userIdentifiers) {
+							var foundSecrets, foundPatterns bool
+							for _, secret := range commit.Secrets {
+								if strings.HasPrefix(secret, "⭐") {
+									if !foundPatterns && cfg.ShowInteresting {
+										color.Yellow("    ⭐ Found patterns:")
+										foundPatterns = true
+									}
+									if cfg.ShowInteresting {
+										color.Yellow("      %s", secret)
+									}
+								} else {
+									if !foundSecrets && checkSecrets {
+										color.Red("    🐽 Found secrets:")
+										foundSecrets = true
+									}
+									if checkSecrets {
+										color.Red("      - %s", secret)
 									}
 								}
 							}
@@ -457,6 +603,16 @@ func main() {
 				Name:    "interesting",
 				Aliases: []string{"i"},
 				Usage:   "Get interesting strings ⭐",
+			},
+			&cli.BoolFlag{
+				Name:    "show-watchers",
+				Aliases: []string{"w"},
+				Usage:   "Show users who watched/starred the repository",
+			},
+			&cli.BoolFlag{
+				Name:    "show-forkers",
+				Aliases: []string{"f"},
+				Usage:   "Show users who forked the repository",
 			},
 		},
 		Action:    runApp,
