@@ -49,6 +49,7 @@ func runApp(c *cli.Context) error {
 	checkSecrets := false
 	showTargetOnly := true
 	showInteresting := false
+	noSlurp := false
 	var target string
 
 	for _, arg := range allArgs {
@@ -61,6 +62,8 @@ func runApp(c *cli.Context) error {
 			showTargetOnly = false
 		case "-i", "--interesting":
 			showInteresting = true
+		case "-n", "--no-slurp":
+			noSlurp = true
 		default:
 			if !strings.HasPrefix(arg, "-") {
 				target = arg
@@ -149,6 +152,10 @@ func runApp(c *cli.Context) error {
 		}
 	}
 
+	if noSlurp {
+		return nil
+	}
+
 	var repos []*gh.Repository
 	var gists []*gh.Gist
 	if isOrg {
@@ -234,9 +241,9 @@ func runApp(c *cli.Context) error {
 	sort.Strings(forkersList)
 
 	if showForkEvents {
+		forkersFile := fmt.Sprintf("%s_forkers.txt", target)
+		content := strings.Join(forkersList, "\n")
 		if len(forkersList) > 50 {
-			forkersFile := "forkers.txt"
-			content := strings.Join(forkersList, "\n")
 			if err := os.WriteFile(forkersFile, []byte(content), 0644); err != nil {
 				return fmt.Errorf("failed to write forkers file: %v", err)
 			}
@@ -246,6 +253,9 @@ func runApp(c *cli.Context) error {
 			for _, forker := range forkersList {
 				fmt.Printf("🔱 %s\n", forker)
 			}
+			if err := os.WriteFile(forkersFile, []byte(content), 0644); err != nil {
+				return fmt.Errorf("failed to write forkers file: %v", err)
+			}
 		} else {
 			fmt.Println("\nNo forks found")
 		}
@@ -253,7 +263,7 @@ func runApp(c *cli.Context) error {
 
 	if showWatchEvents {
 		if len(watchersList) > 50 {
-			watchersFile := "watchers.txt"
+      watchersFile := fmt.Sprintf("%s_watchers.txt", target)
 			content := strings.Join(watchersList, "\n")
 			if err := os.WriteFile(watchersFile, []byte(content), 0644); err != nil {
 				return fmt.Errorf("failed to write watchers file: %v", err)
@@ -613,6 +623,16 @@ func main() {
 				Name:    "show-forkers",
 				Aliases: []string{"f"},
 				Usage:   "Show users who forked the repository",
+			},
+			&cli.BoolFlag{
+				Name:    "output-format",
+				Aliases: []string{"o"},
+				Usage:   "Output format (json, csv, text)",
+			},
+			&cli.BoolFlag{
+				Name:    "no-slurp",
+				Aliases: []string{"n"},
+				Usage:   "Skip repository enumeration process",
 			},
 		},
 		Action:    runApp,
