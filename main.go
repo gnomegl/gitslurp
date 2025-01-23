@@ -104,7 +104,7 @@ func runApp(c *cli.Context) error {
 		}
 
 		username = user.GetLogin()
-		color.Green("✓ Found GitHub user: %s", username)
+		color.Green("Found GitHub user: %s", username)
 	} else {
 		color.Blue("\nTarget user: %s", username)
 	}
@@ -220,7 +220,7 @@ func runApp(c *cli.Context) error {
 		}
 	}
 
-	// use sorted slices 
+	// use sorted slices
 	var watchersList []string
 	for watcher := range watchers {
 		watchersList = append(watchersList, watcher)
@@ -282,8 +282,8 @@ func runApp(c *cli.Context) error {
 		}
 		color.Blue("\nProcessing %d public gists for %s...", len(gists), scanType)
 		gistEmails := github.ProcessGists(context.Background(), client, gists, checkSecrets, &cfg)
-		
-    for email, details := range gistEmails {
+
+		for email, details := range gistEmails {
 			if existing, ok := emails[email]; ok {
 				// Merge names
 				for name := range details.Names {
@@ -383,8 +383,8 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			for name := range entry.Details.Names {
 				names = append(names, name)
 			}
-			color.HiGreen("  ✓ Names used: %s", strings.Join(names, ", "))
-			color.HiGreen("  ✓ Total Commits: %d", entry.Details.CommitCount)
+			color.HiGreen("Names used: %s", strings.Join(names, ", "))
+			color.HiGreen("Total Commits: %d", entry.Details.CommitCount)
 		} else if !showTargetOnly && isUserIdentifier(entry.Email, userIdentifiers) {
 			color.HiYellow(entry.Email)
 			names := make([]string, 0, len(entry.Details.Names))
