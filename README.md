@@ -76,15 +76,14 @@ gitslurp -t <github_token> <username>
 The tool provides a clear, color-coded output:
 - 📍 Target user's emails are marked and highlighted
 - ⭐ Target user's commits are highlighted
-- ✓ Statistics are marked with checkmarks
 - 👤 Author information is clearly displayed
 - 📂 Repository names are organized and highlighted
 
 Example output:
 ```
 📍 user@example.com (Target User)
-  ✓ Names used: John, John Doe
-  ✓ Total Commits: 150
+  Names used: John, John Doe
+  Total Commits: 150
   📂 Repo: example/project
     ⭐ Commit: abc123
     🔗 URL: https://github.com/example/project/commit/abc123
