@@ -23,13 +23,23 @@ func GetGithubClient(token string) *github.Client {
 }
 
 func GetToken(c *cli.Context) string {
-	token := os.Getenv("GITSLURP_GITHUB_TOKEN")
-	if token != "" {
+	if c.String("token") != "" {
+		token := c.String("token")
+		configDir, err := os.UserConfigDir()
+		if err == nil && configDir != "" {
+			configPath := filepath.Join(configDir, "gitslurp")
+			os.MkdirAll(configPath, 0700)
+			tokenFile := filepath.Join(configPath, "token")
+			if err := os.WriteFile(tokenFile, []byte(token), 0600); err == nil {
+				color.Green("Token saved successfully")
+			}
+		}
 		return token
 	}
 
-	if c.String("token") != "" {
-		return c.String("token")
+	token := os.Getenv("GITSLURP_GITHUB_TOKEN")
+	if token != "" {
+		return token
 	}
 
 	configDir, err := os.UserConfigDir()

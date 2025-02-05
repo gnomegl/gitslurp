@@ -95,7 +95,7 @@ Example output:
 For better rate limits and access to private repositories, use a GitHub personal access token:
 
 1. Create a token at https://github.com/settings/tokens
-2. Use the `-t` flag or set the `GITHUB_TOKEN` environment variable
+2. Use the `-t` flag or set the `GITSLURP_GITHUB_TOKEN` environment variable
 
 ## Development
 
