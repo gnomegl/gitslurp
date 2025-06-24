@@ -38,11 +38,6 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Usage:   "Enable sniffing for secrets in commits 🐽",
 			},
 			&cli.BoolFlag{
-				Name:    "all",
-				Aliases: []string{"a"},
-				Usage:   "Show commits from all contributors in the target's repositories",
-			},
-			&cli.BoolFlag{
 				Name:    "interesting",
 				Aliases: []string{"i"},
 				Usage:   "Get interesting strings ⭐",

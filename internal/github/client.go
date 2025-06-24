@@ -149,3 +149,31 @@ func ValidateToken(ctx context.Context, client *github.Client) error {
 	}
 	return nil
 }
+
+func CheckDeleteRepoPermissions(ctx context.Context, client *github.Client) (bool, error) {
+	// Check token permissions by examining the X-OAuth-Scopes header
+	_, resp, err := client.Users.Get(ctx, "")
+	if err != nil {
+		return false, fmt.Errorf("error checking permissions: %v", err)
+	}
+	
+	if resp == nil || resp.Header == nil {
+		return false, nil
+	}
+	
+	scopes := resp.Header.Get("X-OAuth-Scopes")
+	if scopes == "" {
+		return false, nil
+	}
+	
+	// Check if delete_repo scope is present
+	scopeList := strings.Split(scopes, ", ")
+	for _, scope := range scopeList {
+		scope = strings.TrimSpace(scope)
+		if scope == "delete_repo" {
+			return true, nil
+		}
+	}
+	
+	return false, nil
+}
