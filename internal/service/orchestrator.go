@@ -86,6 +86,22 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 	if github.IsValidEmail(o.config.Target) {
 		lookupEmail = o.config.Target
 		color.Blue("\nLooking up GitHub user for email: %s", o.config.Target)
+		
+		// Check for delete_repo permissions when targeting an email
+		hasDeleteRepo, permErr := github.CheckDeleteRepoPermissions(ctx, o.client)
+		if permErr != nil {
+			color.Yellow("⚠️  Warning: Could not check token permissions: %v", permErr)
+		} else if !hasDeleteRepo {
+			color.Red("\n❌ Your GitHub token lacks delete_repo permissions required for email-based investigations")
+			color.Yellow("📋 To update your token permissions:")
+			fmt.Println("1. Visit: https://github.com/settings/tokens")
+			fmt.Println("2. Click on your existing gitslurp token")
+			fmt.Println("3. Check the 'delete_repo' scope")
+			fmt.Println("4. Click 'Update token' at the bottom")
+			color.Blue("\nAlternatively, create a new token with delete_repo permissions:")
+			fmt.Println("https://github.com/settings/tokens/new?description=gitslurp&scopes=repo,read:user,user:email,delete_repo")
+			return "", "", fmt.Errorf("insufficient token permissions for email investigation")
+		}
 
 		user, err := github.GetUserByEmail(ctx, o.client, o.config.Target)
 		if err != nil {
