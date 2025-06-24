@@ -83,23 +83,38 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail string, err error) {
 	username = o.config.Target
 	
-	if strings.Contains(o.config.Target, "@") {
+	if github.IsValidEmail(o.config.Target) {
 		lookupEmail = o.config.Target
 		color.Blue("\nLooking up GitHub user for email: %s", o.config.Target)
 
 		user, err := github.GetUserByEmail(ctx, o.client, o.config.Target)
 		if err != nil {
-			color.Red("❌ Error: %v", err)
-			return "", "", nil
+			color.Red("❌ API search error: %v", err)
+			color.Yellow("🔄 Attempting email spoofing method...")
+			
+			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target)
+			if spoofErr != nil {
+				color.Red("❌ Email spoofing failed: %v", spoofErr)
+				return "", "", fmt.Errorf("failed to resolve email %s: %v", o.config.Target, spoofErr)
+			}
+			
+			username = spoofedUsername
+			color.Green("✅ Found GitHub user via spoofing: %s", username)
+		} else if user == nil {
+			color.Yellow("🔄 No user found via API search, attempting email spoofing...")
+			
+			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target)
+			if spoofErr != nil {
+				color.Red("❌ Email spoofing failed: %v", spoofErr)
+				return "", "", fmt.Errorf("no GitHub user found for email: %s", o.config.Target)
+			}
+			
+			username = spoofedUsername
+			color.Green("✅ Found GitHub user via spoofing: %s", username)
+		} else {
+			username = user.GetLogin()
+			color.Green("✅ Found GitHub user via API: %s", username)
 		}
-
-		if user == nil {
-			color.Red("❌ No GitHub user found for email: %s", o.config.Target)
-			return "", "", fmt.Errorf("no GitHub user found for email: %s", o.config.Target)
-		}
-
-		username = user.GetLogin()
-		color.Green("Found GitHub user: %s", username)
 	} else {
 		color.Blue("\nTarget user: %s", username)
 	}
