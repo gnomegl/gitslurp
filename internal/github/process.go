@@ -113,13 +113,14 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 	bar := progressbar.NewOptions(len(repos),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
+		progressbar.OptionSetWidth(20),
 		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]=[reset]",
-			SaucerHead:    "[green]>[reset]",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
+			Saucer:        "[green]█[reset]",
+			SaucerHead:    "[green]█[reset]",
+			SaucerPadding: "[white]░[reset]",
+			BarStart:      "[blue]▐[reset]",
+			BarEnd:        "[blue]▌[reset]",
 		}))
 
 	for _, repo := range repos {

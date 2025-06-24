@@ -23,7 +23,7 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 	return &AppConfig{
 		ShowDetails:     c.Bool("details"),
 		CheckSecrets:    c.Bool("secrets"),
-		ShowTargetOnly:  !c.Bool("all"),
+		ShowTargetOnly:  false,
 		ShowInteresting: c.Bool("interesting"),
 		NoSlurp:         c.Bool("no-slurp"),
 		ShowWatchers:    c.Bool("show-watchers"),
