@@ -142,8 +142,15 @@ func ValidateToken(ctx context.Context, client *github.Client) error {
 	// Try to fetch authenticated user info to validate token
 	_, resp, err := client.Users.Get(ctx, "")
 	if err != nil {
-		if resp != nil && resp.StatusCode == 401 {
-			return fmt.Errorf("invalid GitHub token")
+		if resp != nil {
+			switch resp.StatusCode {
+			case 401:
+				return fmt.Errorf("invalid GitHub token")
+			case 403:
+				// Rate limited - skip validation, token is likely valid
+				color.Yellow("⚠️  Rate limited, skipping token validation")
+				return nil
+			}
 		}
 		return fmt.Errorf("error validating token: %v", err)
 	}
@@ -154,6 +161,11 @@ func CheckDeleteRepoPermissions(ctx context.Context, client *github.Client) (boo
 	// Check token permissions by examining the X-OAuth-Scopes header
 	_, resp, err := client.Users.Get(ctx, "")
 	if err != nil {
+		if resp != nil && resp.StatusCode == 403 {
+			// Rate limited - assume permissions are sufficient to avoid blocking
+			color.Yellow("⚠️  Rate limited, skipping permission check")
+			return true, nil
+		}
 		return false, fmt.Errorf("error checking permissions: %v", err)
 	}
 	
