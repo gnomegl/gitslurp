@@ -418,6 +418,10 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 
 	totalCommits := 0
 	totalContributors := 0
+	
+	// Track target and similar accounts for summary
+	targetAccounts := make(map[string][]string) // email -> names
+	similarAccounts := make(map[string][]string) // email -> names
 
 	if user != nil {
 		accountType := "User"
@@ -453,8 +457,9 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			for name := range entry.Details.Names {
 				names = append(names, name)
 			}
-			color.HiGreen("Names used: %s", strings.Join(names, ", "))
-			color.HiGreen("Total Commits: %d", entry.Details.CommitCount)
+			targetAccounts[entry.Email] = names
+			color.HiGreen("  Names used: %s", strings.Join(names, ", "))
+			color.HiGreen("  Total Commits: %d", entry.Details.CommitCount)
 		} else if !showTargetOnly && isUserIdentifier(entry.Email, userIdentifiers) {
 			color.HiYellow(entry.Email)
 			names := make([]string, 0, len(entry.Details.Names))
@@ -470,9 +475,10 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			}
 			
 			if hasMatchingTargetNames(names, targetNames) {
-				color.HiMagenta("👁️  %s (Similar Account)", entry.Email)
-				color.Magenta("Names used: %s", strings.Join(names, ", "))
-				color.Magenta("Total Commits: %d", entry.Details.CommitCount)
+				similarAccounts[entry.Email] = names
+				color.Yellow("👁️  %s (Similar Account)", entry.Email)
+				color.Magenta("  Names used: %s", strings.Join(names, ", "))
+				color.Magenta("  Total Commits: %d", entry.Details.CommitCount)
 			} else {
 				color.Yellow(entry.Email)
 				color.White("  Names: %s", strings.Join(names, ", "))
@@ -643,6 +649,36 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 		color.HiCyan("\nTotal commits by target user: %d", totalCommits)
 	} else {
 		color.HiCyan("\nTotal contributors: %d", totalContributors)
+	}
+
+	// Display summary
+	if len(targetAccounts) > 0 || len(similarAccounts) > 0 {
+		fmt.Println("\n" + strings.Repeat("─", 60))
+		color.HiCyan("SUMMARY")
+		fmt.Println(strings.Repeat("─", 60))
+		
+		// Target accounts summary
+		if len(targetAccounts) > 0 {
+			color.HiGreen("\n📍 Target User Accounts:")
+			for email, names := range targetAccounts {
+				color.Green("  • %s", email)
+				if len(names) > 0 {
+					color.Green("    Names: %s", strings.Join(names, ", "))
+				}
+			}
+		}
+		
+		// Similar accounts summary  
+		if len(similarAccounts) > 0 {
+			color.HiMagenta("\n👁️  Similar Accounts:")
+			for email, names := range similarAccounts {
+				color.Magenta("  • %s", email)
+				if len(names) > 0 {
+					color.Magenta("    Names: %s", strings.Join(names, ", "))
+				}
+			}
+		}
+		fmt.Println()
 	}
 }
 
