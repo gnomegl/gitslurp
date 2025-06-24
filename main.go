@@ -279,7 +279,17 @@ func runApp(c *cli.Context) error {
 		}
 	}
 
-	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, &cfg)
+	userIdentifiers := map[string]bool{
+		username:    true,
+		lookupEmail: true,
+	}
+	if user != nil {
+		userIdentifiers[user.GetLogin()] = true
+		userIdentifiers[user.GetName()] = true
+		userIdentifiers[user.GetEmail()] = true
+	}
+
+	emails := github.ProcessRepos(context.Background(), client, repos, checkSecrets, &cfg, userIdentifiers, showTargetOnly)
 
 	if len(gists) > 0 && (checkSecrets || cfg.ShowInteresting) {
 		var scanType string
@@ -331,6 +341,54 @@ func isUserIdentifier(identifier string, userIdentifiers map[string]bool) bool {
 	return userIdentifiers[identifier]
 }
 
+func extractTargetUserNames(emails map[string]*models.EmailDetails, userIdentifiers map[string]bool) map[string]bool {
+	targetNames := make(map[string]bool)
+	
+	for email, details := range emails {
+		isTargetUser := userIdentifiers[email]
+		if !isTargetUser {
+			for name := range details.Names {
+				if userIdentifiers[name] {
+					isTargetUser = true
+					break
+				}
+			}
+		}
+		
+		if isTargetUser {
+			for name := range details.Names {
+				// Split names by space and comma
+				nameParts := strings.FieldsFunc(name, func(c rune) bool {
+					return c == ' ' || c == ','
+				})
+				for _, part := range nameParts {
+					part = strings.TrimSpace(part)
+					if part != "" {
+						targetNames[part] = true
+					}
+				}
+			}
+		}
+	}
+	
+	return targetNames
+}
+
+func hasMatchingTargetNames(names []string, targetNames map[string]bool) bool {
+	for _, name := range names {
+		nameParts := strings.FieldsFunc(name, func(c rune) bool {
+			return c == ' ' || c == ','
+		})
+		for _, part := range nameParts {
+			part = strings.TrimSpace(part)
+			if targetNames[part] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func displayResults(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool, lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config) {
 	type emailEntry struct {
 		Email   string
@@ -355,6 +413,8 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 		userIdentifiers[user.GetName()] = true
 		userIdentifiers[user.GetEmail()] = true
 	}
+
+	targetNames := extractTargetUserNames(emails, userIdentifiers)
 
 	totalCommits := 0
 	totalContributors := 0
@@ -404,13 +464,20 @@ func displayResults(emails map[string]*models.EmailDetails, showDetails bool, ch
 			color.HiWhite("  Names: %s", strings.Join(names, ", "))
 			color.HiWhite("  Total Commits: %d", entry.Details.CommitCount)
 		} else {
-			color.Yellow(entry.Email)
 			names := make([]string, 0, len(entry.Details.Names))
 			for name := range entry.Details.Names {
 				names = append(names, name)
 			}
-			color.White("  Names: %s", strings.Join(names, ", "))
-			color.White("  Total Commits: %d", entry.Details.CommitCount)
+			
+			if hasMatchingTargetNames(names, targetNames) {
+				color.HiMagenta("👁️  %s (Similar Account)", entry.Email)
+				color.Magenta("Names used: %s", strings.Join(names, ", "))
+				color.Magenta("Total Commits: %d", entry.Details.CommitCount)
+			} else {
+				color.Yellow(entry.Email)
+				color.White("  Names: %s", strings.Join(names, ", "))
+				color.White("  Total Commits: %d", entry.Details.CommitCount)
+			}
 		}
 
 		if showDetails || checkSecrets || cfg.ShowInteresting {
