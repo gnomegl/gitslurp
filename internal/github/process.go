@@ -88,8 +88,7 @@ func ExtractLinks(text string) []string {
 	return links
 }
 
-// ProcessRepos processes repositories concurrently with rate limiting and progress tracking
-func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository, checkSecrets bool, cfg *Config) map[string]*models.EmailDetails {
+func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
@@ -130,13 +129,25 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 			sem <- true
 			defer func() { <-sem }()
 
-			commits, _, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), nil)
-			if err != nil {
-				return
+			var allCommits []*gh.RepositoryCommit
+			opts := &gh.CommitsListOptions{
+				ListOptions: gh.ListOptions{PerPage: 100},
+			}
+			
+			for {
+				commits, resp, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+				if err != nil {
+					break
+				}
+				allCommits = append(allCommits, commits...)
+				if resp.NextPage == 0 {
+					break
+				}
+				opts.Page = resp.NextPage
 			}
 
 			var repoCommits []models.CommitInfo
-			for _, commit := range commits {
+			for _, commit := range allCommits {
 				// If we're scanning for secrets or patterns, fetch the full commit with files
 				if checkSecrets || cfg.ShowInteresting {
 					fullCommit, _, err := client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
@@ -149,7 +160,7 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 			}
 
 			mutex.Lock()
-			aggregateCommits(emails, repoCommits, repo.GetFullName())
+			aggregateCommits(emails, repoCommits, repo.GetFullName(), targetUserIdentifiers, showTargetOnly)
 			mutex.Unlock()
 
 			bar.Add(1)
@@ -263,10 +274,18 @@ func isPackageManagerFile(filename string) bool {
 }
 
 // email -> commit mapping
-func aggregateCommits(emails map[string]*models.EmailDetails, commits []models.CommitInfo, repoName string) {
+func aggregateCommits(emails map[string]*models.EmailDetails, commits []models.CommitInfo, repoName string, targetUserIdentifiers map[string]bool, showTargetOnly bool) {
 	for _, commit := range commits {
 		if commit.AuthorEmail == "" {
 			continue
+		}
+
+		// only filter commits when showing target only
+		if showTargetOnly && targetUserIdentifiers != nil {
+			isTargetUser := targetUserIdentifiers[commit.AuthorEmail] || targetUserIdentifiers[commit.AuthorName]
+			if !isTargetUser {
+				continue
+			}
 		}
 
 		email := commit.AuthorEmail
