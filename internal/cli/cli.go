@@ -43,9 +43,9 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Usage:   "⭐ Get interesting strings",
 			},
 			&cli.BoolFlag{
-				Name:    "show-watchers",
-				Aliases: []string{"w"},
-				Usage:   "Show users who watched/starred the repository",
+				Name:    "show-stargazers",
+				Aliases: []string{"S"},
+				Usage:   "Show users who starred the repository",
 			},
 			&cli.BoolFlag{
 				Name:    "show-forkers",
