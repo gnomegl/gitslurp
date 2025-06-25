@@ -248,7 +248,7 @@ func displayNonTargetUser(email string, names []string, commitCount int, targetN
 		color.HiWhite("  Total Commits: %d", commitCount)
 	} else if hasMatchingTargetNames(names, targetNames) {
 		similarAccounts[email] = names
-		color.Yellow("👁️  %s (Similar Account)", email)
+		color.Yellow("👁️ %s (Similar Account)", email)
 		color.Magenta("  Names used: %s", strings.Join(names, ", "))
 		color.Magenta("  Total Commits: %d", commitCount)
 	} else {
@@ -449,7 +449,7 @@ func displaySummary(targetAccounts, similarAccounts map[string][]string) {
 	fmt.Println(strings.Repeat("─", 60))
 	
 	if len(targetAccounts) > 0 {
-		color.HiGreen("\n📍 Target User Accounts:")
+		fmt.Println("\n📍  Target User Accounts:")
 		for email, names := range targetAccounts {
 			color.Green("  • %s", email)
 			if len(names) > 0 {

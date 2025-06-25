@@ -18,7 +18,7 @@ func NewApp(action cli.ActionFunc) *cli.App {
 
 	return &cli.App{
 		Name:    "gitslurp",
-		Usage:   "OSINT tool to analyze GitHub user's commit history across repositories",
+		Usage:   "OSINT tool to analyze GitHub user's recent activity and commit history",
 		Version: "v" + utils.GetVersion(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -35,12 +35,12 @@ func NewApp(action cli.ActionFunc) *cli.App {
 			&cli.BoolFlag{
 				Name:    "secrets",
 				Aliases: []string{"s"},
-				Usage:   "Enable sniffing for secrets in commits 🐽",
+				Usage:   "🐽 Enable sniffing for secrets in commits",
 			},
 			&cli.BoolFlag{
 				Name:    "interesting",
 				Aliases: []string{"i"},
-				Usage:   "Get interesting strings ⭐",
+				Usage:   "⭐ Get interesting strings",
 			},
 			&cli.BoolFlag{
 				Name:    "show-watchers",
@@ -58,9 +58,13 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Usage:   "Output format (json, csv, text)",
 			},
 			&cli.BoolFlag{
-				Name:    "no-slurp",
-				Aliases: []string{"n"},
-				Usage:   "Skip repository enumeration process",
+				Name:    "profile-only",
+				Aliases: []string{"p"},
+				Usage:   "Show user profile only, skip repository analysis",
+			},
+			&cli.BoolFlag{
+				Name:    "deep",
+				Usage:   "🔍 Deep crawl all commits (slower, uses more API calls, default: recent events only)",
 			},
 		},
 		Action:    action,

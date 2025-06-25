@@ -26,11 +26,13 @@ func FetchOrgRepos(ctx context.Context, client *github.Client, orgName string, c
 			return nil, fmt.Errorf("error fetching repositories: %v", err)
 		}
 		allRepos = append(allRepos, repos...)
+		
 		if resp.NextPage == 0 {
 			break
 		}
 		opt.Page = resp.NextPage
 	}
+	
 	return allRepos, nil
 }
 
