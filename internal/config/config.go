@@ -9,9 +9,10 @@ type AppConfig struct {
 	CheckSecrets    bool
 	ShowTargetOnly  bool
 	ShowInteresting bool
-	NoSlurp         bool
+	ProfileOnly     bool
 	ShowWatchers    bool
 	ShowForkers     bool
+	DeepCrawl       bool
 	Target          string
 }
 
@@ -25,9 +26,10 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		CheckSecrets:    c.Bool("secrets"),
 		ShowTargetOnly:  false,
 		ShowInteresting: c.Bool("interesting"),
-		NoSlurp:         c.Bool("no-slurp"),
+		ProfileOnly:     c.Bool("profile-only"),
 		ShowWatchers:    c.Bool("show-watchers"),
 		ShowForkers:     c.Bool("show-forkers"),
+		DeepCrawl:       c.Bool("deep"),
 		Target:          c.Args().First(),
 	}, nil
 }

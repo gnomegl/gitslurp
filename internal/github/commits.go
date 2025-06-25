@@ -18,6 +18,21 @@ func FetchRepos(ctx context.Context, client *github.Client, username string, cfg
 		*cfg = DefaultConfig()
 	}
 
+	// First, get the total count of repositories
+	user, _, err := client.Users.Get(ctx, username)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching user info: %v", err)
+	}
+	
+	return FetchReposWithUser(ctx, client, username, cfg, user)
+}
+
+func FetchReposWithUser(ctx context.Context, client *github.Client, username string, cfg *Config, user *github.User) ([]*github.Repository, error) {
+	if cfg == nil {
+		cfg = &Config{} // sneed why can't i do cfg = &DefaultConfig()
+		*cfg = DefaultConfig()
+	}
+
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByUserOptions{
 		ListOptions: github.ListOptions{PerPage: cfg.PerPage},
@@ -30,11 +45,13 @@ func FetchRepos(ctx context.Context, client *github.Client, username string, cfg
 			return nil, fmt.Errorf("error fetching repositories: %v", err)
 		}
 		allRepos = append(allRepos, repos...)
+		
 		if resp.NextPage == 0 {
 			break
 		}
 		opt.Page = resp.NextPage
 	}
+	
 	return allRepos, nil
 }
 
