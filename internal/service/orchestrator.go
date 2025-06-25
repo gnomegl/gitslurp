@@ -17,12 +17,14 @@ import (
 type Orchestrator struct {
 	client *gh.Client
 	config *config.AppConfig
+	token  string
 }
 
-func NewOrchestrator(client *gh.Client, cfg *config.AppConfig) *Orchestrator {
+func NewOrchestrator(client *gh.Client, cfg *config.AppConfig, token string) *Orchestrator {
 	return &Orchestrator{
 		client: client,
 		config: cfg,
+		token:  token,
 	}
 }
 
@@ -111,7 +113,7 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 			color.Red("[x] API search error: %v", err)
 			color.Yellow("[~] Attempting email spoofing method...")
 			
-			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target)
+			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target, o.token)
 			if spoofErr != nil {
 				color.Red("[x] Email spoofing failed: %v", spoofErr)
 				return "", "", fmt.Errorf("failed to resolve email %s: %v", o.config.Target, spoofErr)
@@ -122,7 +124,7 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 		} else if user == nil {
 			color.Yellow("[~] No user found via API search, attempting email spoofing...")
 			
-			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target)
+			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target, o.token)
 			if spoofErr != nil {
 				color.Red("[x] Email spoofing failed: %v", spoofErr)
 				return "", "", fmt.Errorf("no GitHub user found for email: %s", o.config.Target)

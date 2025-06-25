@@ -529,14 +529,13 @@ func displaySummary(targetAccounts, similarAccounts map[string][]string) {
 		return
 	}
 
-	fmt.Println("\n" + strings.Repeat("─", 60))
-	color.HiCyan("SUMMARY")
+	color.HiCyan("\nSUMMARY")
 	fmt.Println(strings.Repeat("─", 60))
 
 	if len(targetAccounts) > 0 {
 		fmt.Println("\n📍  Target User Accounts:")
 		for email, names := range targetAccounts {
-			fmt.Printf("  • %s", email)
+			color.Yellow("  • %s", email)
 			if len(names) > 0 {
 				color.Green("    Names: %s", strings.Join(names, ", "))
 			}
@@ -546,7 +545,7 @@ func displaySummary(targetAccounts, similarAccounts map[string][]string) {
 	if len(similarAccounts) > 0 {
 		fmt.Println("\n👁️  Similar Accounts:")
 		for email, names := range similarAccounts {
-			fmt.Printf("  • %s", email)
+			color.Yellow("  • %s", email)
 			if len(names) > 0 {
 				color.Magenta("    Names: %s", strings.Join(names, ", "))
 			}

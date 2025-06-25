@@ -38,7 +38,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	// Fetch user events
 	var allEvents []*gh.Event
 	opts := &gh.ListOptions{PerPage: 100}
-	
+
 	bar := progressbar.NewOptions(-1,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetDescription("[cyan]Fetching events...[reset]"),
@@ -58,16 +58,16 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 			color.Yellow("[!]  Warning: Could not fetch user events: %v", err)
 			break
 		}
-		
+
 		allEvents = append(allEvents, events...)
 		bar.Add(len(events))
-		
+
 		if resp.NextPage == 0 || len(allEvents) >= 300 { // Limit to recent activity
 			break
 		}
 		opts.Page = resp.NextPage
 	}
-	
+
 	bar.Finish()
 
 	if len(allEvents) == 0 {
@@ -100,7 +100,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 		}
 		processBar.Add(1)
 	}
-	
+
 	processBar.Finish()
 
 	if commitCount > 0 {
@@ -113,7 +113,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 // processEventCommits extracts commit information from push events
 func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event, checkSecrets bool, cfg *Config) []models.CommitInfo {
 	var commits []models.CommitInfo
-	
+
 	// Get the payload - it's a function that returns interface{}
 	payloadData := event.Payload()
 	if payloadData == nil {
@@ -138,7 +138,7 @@ func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event
 		}
 
 		var commitInfo models.CommitInfo
-		
+
 		// Extract basic commit info
 		if sha, ok := commit["sha"].(string); ok {
 			commitInfo.Hash = sha
@@ -182,7 +182,7 @@ func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event
 		// Scan commit message for secrets/patterns if enabled
 		if (checkSecrets || cfg.ShowInteresting) && commitInfo.Message != "" {
 			secretScanner := scanner.NewScanner(cfg.ShowInteresting)
-			commitInfo.Secrets = append(commitInfo.Secrets, 
+			commitInfo.Secrets = append(commitInfo.Secrets,
 				scanContent(secretScanner, commitInfo.Message, "commit message", checkSecrets, cfg.ShowInteresting)...)
 		}
 
@@ -199,9 +199,8 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		*cfg = DefaultConfig()
 	}
 
-
 	emails := make(map[string]*models.EmailDetails)
-	
+
 	// Rate limiting setup
 	rateLimiter := time.NewTicker(time.Millisecond * 200) // 5 requests per second max
 	defer rateLimiter.Stop()
@@ -212,22 +211,22 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	totalMergeCommits := 0
 
 	// Progress tracking
-	progressDescription := "[cyan]Deep analysis of repositories[reset]"
+	progressDescription := "[cyan]Slurping repositories[reset]"
 	if cfg.QuickMode {
-		progressDescription = "[cyan]⚡ Quick analysis of repositories[reset]"
+		progressDescription = "[cyan]⚡ Slurping repositories[reset]"
 	}
-	
+
 	bar := progressbar.NewOptions(totalRepos,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
-		progressbar.OptionSetWidth(20),
+    progressbar.OptionSetWidth(10),
 		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]█[reset]",
-			SaucerHead:    "[green]█[reset]",
+			Saucer:        "[green]▓[reset]",
+			SaucerHead:    "[green]▓[reset]",
 			SaucerPadding: "[white]░[reset]",
-			BarStart:      "[blue]▐[reset]",
-			BarEnd:        "[blue]▌[reset]",
+			BarStart:      "[blue]│[reset]",
+			BarEnd:        "[blue]│[reset]",
 		}))
 
 	for _, repo := range repos {
@@ -242,7 +241,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		if cfg.QuickMode {
 			perPage = 50
 		}
-		
+
 		opts := &gh.CommitsListOptions{
 			ListOptions: gh.ListOptions{PerPage: perPage},
 		}
@@ -265,7 +264,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 			}
 
 			allRepoCommits = append(allRepoCommits, commits...)
-			
+
 			if resp.NextPage == 0 || cfg.QuickMode {
 				break
 			}
@@ -284,7 +283,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 					commit = fullCommit
 				}
 			}
-			
+
 			commitInfo := ProcessCommit(commit, checkSecrets, cfg)
 			// Only include commits with email addresses for contributor analysis
 			if commitInfo.AuthorEmail != "" && strings.Contains(commitInfo.AuthorEmail, "@") {
@@ -337,7 +336,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		for domain, count := range domainStats {
 			domains = append(domains, domainCount{domain, count})
 		}
-		
+
 		// Simple sort by count (descending)
 		for i := 0; i < len(domains)-1; i++ {
 			for j := i + 1; j < len(domains); j++ {
@@ -366,11 +365,11 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 	}
 
 	emails := make(map[string]*models.EmailDetails)
-	
+
 	// Limit repos but process more recent commits from each
 	maxRepos := 10
 	maxCommitsPerRepo := 50
-	
+
 	if len(repos) > maxRepos {
 		color.Yellow("[>] Processing only %d most recent repositories (out of %d total)", maxRepos, len(repos))
 		repos = repos[:maxRepos]
@@ -396,22 +395,22 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 		progressbar.OptionSetWidth(20),
 		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]█[reset]",
-			SaucerHead:    "[green]█[reset]",
-			SaucerPadding: "[white]░[reset]",
-			BarStart:      "[blue]▐[reset]",
-			BarEnd:        "[blue]▌[reset]",
+			Saucer:        "[green]━[reset]",
+			SaucerHead:    "[green]⟩[reset]",
+			SaucerPadding: "[white]╌[reset]",
+			BarStart:      "[blue]┃[reset]",
+			BarEnd:        "[blue]┃[reset]",
 		}))
 
 	for _, repo := range repos {
 		// Small delay to be nice to the API
 		time.Sleep(time.Millisecond * 100)
-		
+
 		// Get only recent commits
 		opts := &gh.CommitsListOptions{
 			ListOptions: gh.ListOptions{PerPage: maxCommitsPerRepo},
 		}
-		
+
 		commits, _, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 		if err != nil {
 			color.Yellow("[!]  Skipping repo %s: %v", repo.GetFullName(), err)
@@ -421,7 +420,6 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 
 		var repoCommits []models.CommitInfo
 		for _, commit := range commits {
-			// Don't fetch full commit details for secrets scanning in light mode
 			commitInfo := ProcessCommit(commit, false, cfg) // Force checkSecrets to false
 			repoCommits = append(repoCommits, commitInfo)
 		}
@@ -433,3 +431,4 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 	bar.Finish()
 	return emails
 }
+
