@@ -148,7 +148,7 @@ func ValidateToken(ctx context.Context, client *github.Client) error {
 				return fmt.Errorf("invalid GitHub token")
 			case 403:
 				// Rate limited - skip validation, token is likely valid
-				color.Yellow("⚠️  Rate limited, skipping token validation")
+				color.Yellow("[!]  Rate limited, skipping token validation")
 				return nil
 			}
 		}
@@ -163,7 +163,7 @@ func CheckDeleteRepoPermissions(ctx context.Context, client *github.Client) (boo
 	if err != nil {
 		if resp != nil && resp.StatusCode == 403 {
 			// Rate limited - assume permissions are sufficient to avoid blocking
-			color.Yellow("⚠️  Rate limited, skipping permission check")
+			color.Yellow("[!]  Rate limited, skipping permission check")
 			return true, nil
 		}
 		return false, fmt.Errorf("error checking permissions: %v", err)

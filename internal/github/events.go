@@ -55,7 +55,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	for {
 		events, resp, err := client.Activity.ListEventsPerformedByUser(ctx, username, false, opts)
 		if err != nil {
-			color.Yellow("⚠️  Warning: Could not fetch user events: %v", err)
+			color.Yellow("[!]  Warning: Could not fetch user events: %v", err)
 			break
 		}
 		
@@ -71,11 +71,11 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	bar.Finish()
 
 	if len(allEvents) == 0 {
-		color.Yellow("⚠️  No recent events found for user: %s", username)
+		color.Yellow("[!]  No recent events found for user: %s", username)
 		return emails
 	}
 
-	color.Green("✅ Found %d recent events", len(allEvents))
+	color.Green("[✓] Found %d recent events", len(allEvents))
 
 	// Process push events to extract commit information
 	commitCount := 0
@@ -104,7 +104,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	processBar.Finish()
 
 	if commitCount > 0 {
-		color.Green("✅ Processed %d commits from recent push events", commitCount)
+		color.Green("[✓] Processed %d commits from recent push events", commitCount)
 	}
 
 	return emails
@@ -199,9 +199,6 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		*cfg = DefaultConfig()
 	}
 
-	color.Yellow("🔍 Deep crawl mode: Comprehensive contributor enumeration")
-	color.Blue("📊 This will analyze ALL commits across ALL repositories")
-	color.Yellow("⏳ This may take several minutes depending on repository size")
 
 	emails := make(map[string]*models.EmailDetails)
 	
@@ -244,7 +241,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 			<-rateLimiter.C // Rate limit each API call
 			commits, resp, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 			if err != nil {
-				color.Yellow("⚠️  Skipping repo %s: %v", repo.GetFullName(), err)
+				color.Yellow("[!]  Skipping repo %s: %v", repo.GetFullName(), err)
 				break
 			}
 
@@ -297,8 +294,8 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	bar.Finish()
 
 	// Display comprehensive statistics
-	color.Green("\n✅ Deep Analysis Complete!")
-	color.Blue("📊 Statistics:")
+	color.Green("\n[✓] Analysis Complete!")
+	color.Blue("[=] Statistics:")
 	color.Blue("   • Total repositories analyzed: %d", totalRepos)
 	color.Blue("   • Total commits processed: %d", totalCommitsProcessed)
 	color.Blue("   • Direct commits: %d", totalDirectCommits)
@@ -315,7 +312,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 			}
 		}
 
-		color.Blue("\n📧 Email Domain Distribution:")
+		color.Blue("\n[@] Email Domain Distribution:")
 		// Sort domains by count
 		type domainCount struct {
 			domain string
@@ -360,11 +357,11 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 	maxCommitsPerRepo := 50
 	
 	if len(repos) > maxRepos {
-		color.Yellow("⚡ Processing only %d most recent repositories (out of %d total)", maxRepos, len(repos))
+		color.Yellow("[>] Processing only %d most recent repositories (out of %d total)", maxRepos, len(repos))
 		repos = repos[:maxRepos]
 	}
 
-	color.Blue("⚡ Light processing: %d repos, max %d recent commits each", len(repos), maxCommitsPerRepo)
+	color.Blue("[>] Light processing: %d repos, max %d recent commits each", len(repos), maxCommitsPerRepo)
 
 	// Add progress bar for fallback processing
 	var progressDescription string
@@ -402,7 +399,7 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 		
 		commits, _, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 		if err != nil {
-			color.Yellow("⚠️  Skipping repo %s: %v", repo.GetFullName(), err)
+			color.Yellow("[!]  Skipping repo %s: %v", repo.GetFullName(), err)
 			bar.Add(1)
 			continue
 		}

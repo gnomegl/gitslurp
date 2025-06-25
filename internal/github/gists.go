@@ -31,7 +31,7 @@ func FetchGists(ctx context.Context, client *github.Client, username string, cfg
 			gistContent, _, err := client.Gists.Get(ctx, gist.GetID())
 			if err != nil {
 				// Log warning but continue with other gists
-				color.Yellow("⚠️  Warning: Could not fetch content for gist %s: %v", gist.GetID(), err)
+				color.Yellow("[!]  Warning: Could not fetch content for gist %s: %v", gist.GetID(), err)
 				continue
 			}
 			// Update the files with their content
