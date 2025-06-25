@@ -44,14 +44,14 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 	display.UserInfo(user, isOrg)
 
-	if o.config.NoSlurp {
+	if o.config.ProfileOnly {
 		return nil
 	}
 
 	cfg := github.DefaultConfig()
 	cfg.ShowInteresting = o.config.ShowInteresting
 
-	repos, gists, err := o.fetchReposAndGists(ctx, username, isOrg, &cfg)
+	repos, gists, err := o.fetchReposAndGists(ctx, username, isOrg, &cfg, user)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,18 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 	userIdentifiers := o.buildUserIdentifiers(username, lookupEmail, user)
 
-	emails := github.ProcessRepos(ctx, o.client, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
+	var emails map[string]*models.EmailDetails
+	if o.config.DeepCrawl {
+		emails = github.RateLimitedProcessRepos(ctx, o.client, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
+	} else {
+		emails = github.ProcessUserEvents(ctx, o.client, username, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
+		// If no events found, fall back to processing recent commits from repos (rate limited)
+		if len(emails) == 0 && len(repos) > 0 {
+			color.Blue("⚡ No recent events found, falling back to light repository processing")
+			color.Yellow("💡 Tip: Use --deep flag for complete history (slower but thorough)")
+			emails = github.ProcessReposLimited(ctx, o.client, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
+		}
+	}
 
 	if len(gists) > 0 && (o.config.CheckSecrets || cfg.ShowInteresting) {
 		emails = o.processGists(ctx, gists, emails, &cfg)
@@ -166,7 +177,7 @@ func (o *Orchestrator) fetchUserInfo(ctx context.Context, username, lookupEmail 
 	return user, isOrg, nil
 }
 
-func (o *Orchestrator) fetchReposAndGists(ctx context.Context, username string, isOrg bool, cfg *github.Config) ([]*gh.Repository, []*gh.Gist, error) {
+func (o *Orchestrator) fetchReposAndGists(ctx context.Context, username string, isOrg bool, cfg *github.Config, user *gh.User) ([]*gh.Repository, []*gh.Gist, error) {
 	var repos []*gh.Repository
 	var gists []*gh.Gist
 	var err error
@@ -174,16 +185,17 @@ func (o *Orchestrator) fetchReposAndGists(ctx context.Context, username string, 
 	if isOrg {
 		repos, err = github.FetchOrgRepos(ctx, o.client, username, cfg)
 	} else {
-		repos, err = github.FetchRepos(ctx, o.client, username, cfg)
+		repos, err = github.FetchReposWithUser(ctx, o.client, username, cfg, user)
 		if err != nil {
 			color.Red("❌ Error: %v", err)
 			return nil, nil, err
 		}
 
-		gists, err = github.FetchGists(ctx, o.client, username, cfg)
-		if err != nil {
-			color.Yellow("⚠️  Warning: Could not fetch gists: %v", err)
-		}
+		// Gist checking disabled for performance
+		// gists, err = github.FetchGists(ctx, o.client, username, cfg)
+		// if err != nil {
+		//	color.Yellow("⚠️  Warning: Could not fetch gists: %v", err)
+		// }
 	}
 
 	if err != nil {
