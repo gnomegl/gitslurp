@@ -62,8 +62,13 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 	}
 
 	var allCommits []models.CommitInfo
+	perPage := cfg.PerPage
+	if cfg.QuickMode {
+		perPage = 50
+	}
+	
 	opt := &github.CommitsListOptions{
-		ListOptions: github.ListOptions{PerPage: cfg.PerPage},
+		ListOptions: github.ListOptions{PerPage: perPage},
 	}
 	if since != nil {
 		opt.Since = *since
@@ -141,7 +146,7 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 			allCommits = append(allCommits, commitInfo)
 		}
 
-		if resp.NextPage == 0 {
+		if resp.NextPage == 0 || cfg.QuickMode {
 			break
 		}
 		opt.Page = resp.NextPage

@@ -62,6 +62,11 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Aliases: []string{"p"},
 				Usage:   "Show user profile only, skip repository analysis",
 			},
+			&cli.BoolFlag{
+				Name:    "quick",
+				Aliases: []string{"q"},
+				Usage:   "⚡ Quick mode - fetch ~50 most recent commits per repo",
+			},
 		},
 		Action:    action,
 		ArgsUsage: "<username|email>",

@@ -12,6 +12,7 @@ type AppConfig struct {
 	ProfileOnly     bool
 	ShowWatchers    bool
 	ShowForkers     bool
+	QuickMode       bool
 	Target          string
 }
 
@@ -28,6 +29,7 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		ProfileOnly:     c.Bool("profile-only"),
 		ShowWatchers:    c.Bool("show-watchers"),
 		ShowForkers:     c.Bool("show-forkers"),
+		QuickMode:       c.Bool("quick"),
 		Target:          c.Args().First(),
 	}, nil
 }

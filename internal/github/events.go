@@ -212,11 +212,16 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	totalMergeCommits := 0
 
 	// Progress tracking
+	progressDescription := "[cyan]Deep analysis of repositories[reset]"
+	if cfg.QuickMode {
+		progressDescription = "[cyan]⚡ Quick analysis of repositories[reset]"
+	}
+	
 	bar := progressbar.NewOptions(totalRepos,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
 		progressbar.OptionSetWidth(20),
-		progressbar.OptionSetDescription("[cyan]Deep analysis of repositories[reset]"),
+		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]█[reset]",
 			SaucerHead:    "[green]█[reset]",
@@ -233,8 +238,13 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		var allRepoCommits []*gh.RepositoryCommit
 
 		// Fetch ALL commits from this repository (paginated)
+		perPage := 100
+		if cfg.QuickMode {
+			perPage = 50
+		}
+		
 		opts := &gh.CommitsListOptions{
-			ListOptions: gh.ListOptions{PerPage: 100},
+			ListOptions: gh.ListOptions{PerPage: perPage},
 		}
 
 		for {
@@ -256,7 +266,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 
 			allRepoCommits = append(allRepoCommits, commits...)
 			
-			if resp.NextPage == 0 {
+			if resp.NextPage == 0 || cfg.QuickMode {
 				break
 			}
 			opts.Page = resp.NextPage
@@ -266,7 +276,8 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		var repoCommitInfos []models.CommitInfo
 		for _, commit := range allRepoCommits {
 			// For deep mode, optionally fetch full commit details for secrets scanning
-			if checkSecrets || cfg.ShowInteresting {
+			// Skip fetching full commit details in quick mode to save API calls
+			if (checkSecrets || cfg.ShowInteresting) && !cfg.QuickMode {
 				<-rateLimiter.C // Rate limit
 				fullCommit, _, err := client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
 				if err == nil {
@@ -295,7 +306,11 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 
 	// Display comprehensive statistics
 	color.Green("\n[✓] Analysis Complete!")
-	color.Blue("[=] Statistics:")
+	if cfg.QuickMode {
+		color.Blue("[⚡] Quick Mode Statistics:")
+	} else {
+		color.Blue("[=] Statistics:")
+	}
 	color.Blue("   • Total repositories analyzed: %d", totalRepos)
 	color.Blue("   • Total commits processed: %d", totalCommitsProcessed)
 	color.Blue("   • Direct commits: %d", totalDirectCommits)
