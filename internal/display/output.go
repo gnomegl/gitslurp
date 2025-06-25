@@ -117,13 +117,97 @@ func UserInfo(user *gh.User, isOrg bool) {
 		return
 	}
 
+	fmt.Println()
+	if isOrg {
+		fmt.Print("🏢 ")
+		color.HiCyan("ORGANIZATION PROFILE")
+	} else {
+		fmt.Print("👤 ")
+		color.HiCyan("USER PROFILE")
+	}
+	fmt.Println(strings.Repeat("═", 50))
+	fmt.Println()
+
+	color.HiWhite("Username:")
+	color.HiGreen("%s", user.GetLogin())
+
 	if user.GetName() != "" {
-		fmt.Printf("Name: %s\n", user.GetName())
+		color.HiWhite("%-12s", "Name:")
+		color.HiGreen("%s", user.GetName())
+		fmt.Println()
 	}
 
-	if !isOrg && user.GetBio() != "" {
-		fmt.Printf("Bio: %s\n", user.GetBio())
+	if user.GetEmail() != "" {
+		color.HiWhite("%-12s", "Email:")
+		color.HiGreen("%s", user.GetEmail())
+		fmt.Println()
 	}
+
+	if user.GetBio() != "" {
+		color.HiWhite("%-12s", "Bio:")
+		color.HiCyan("%s", user.GetBio())
+		fmt.Println()
+	}
+
+	if user.GetCompany() != "" {
+		color.HiWhite("%-12s", "Company:")
+		color.HiYellow("%s", user.GetCompany())
+		fmt.Println()
+	}
+
+	if user.GetLocation() != "" {
+		color.HiWhite("%-12s", "Location:")
+		color.HiMagenta("📍 %s", user.GetLocation())
+		fmt.Println()
+	}
+
+	if user.GetBlog() != "" {
+		color.HiWhite("%-12s", "Website:")
+		color.HiBlue("🔗 %s", user.GetBlog())
+		fmt.Println()
+	}
+
+	if user.GetTwitterUsername() != "" {
+		color.HiWhite("%-12s", "Twitter:")
+		color.HiBlue("🐦 @%s", user.GetTwitterUsername())
+		fmt.Println()
+	}
+
+	color.HiWhite("📅 Account Info:")
+	fmt.Println()
+
+	if isOrg {
+		if user.GetPublicRepos() > 0 {
+			color.HiWhite("%-12s", "Repositories:")
+			color.HiGreen("%d", user.GetPublicRepos())
+			fmt.Println()
+		}
+	} else {
+		color.HiWhite("%-12s", "Repositories:")
+		color.HiGreen("%-8d", user.GetPublicRepos())
+		color.HiWhite("Gists: ")
+		color.HiGreen("%d", user.GetPublicGists())
+		fmt.Println()
+		color.HiWhite("%-12s", "Followers:")
+		color.HiCyan("%-8d", user.GetFollowers())
+		color.HiWhite("Following: ")
+		color.HiCyan("%d", user.GetFollowing())
+		fmt.Println()
+	}
+
+	if !user.GetCreatedAt().Time.IsZero() {
+		color.HiWhite("%-12s", "Created:")
+		color.HiGreen("%s", user.GetCreatedAt().Time.Format("January 2, 2006"))
+		fmt.Println()
+	}
+
+	if !user.GetUpdatedAt().Time.IsZero() {
+		color.HiWhite("%-12s", "Last Updated:")
+		color.HiYellow("%s", user.GetUpdatedAt().Time.Format("January 2, 2006"))
+		fmt.Println()
+	}
+
+	fmt.Println()
 }
 
 // Results shows all the collected information about emails and commits
