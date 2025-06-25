@@ -8,6 +8,7 @@ import (
 	"github.com/gnomegl/gitslurp/internal/auth"
 	cliPkg "github.com/gnomegl/gitslurp/internal/cli"
 	"github.com/gnomegl/gitslurp/internal/config"
+	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/service"
 	"github.com/urfave/cli/v2"
 )
@@ -38,7 +39,9 @@ func runApp(c *cli.Context) error {
 		return err
 	}
 
-	orchestrator := service.NewOrchestrator(client, appConfig)
+	// Get the token to pass to orchestrator
+	token := github.GetToken(c)
+	orchestrator := service.NewOrchestrator(client, appConfig, token)
 	return orchestrator.Run(ctx)
 }
 

@@ -134,7 +134,7 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 			opts := &gh.CommitsListOptions{
 				ListOptions: gh.ListOptions{PerPage: 100},
 			}
-			
+
 			for {
 				commits, resp, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 				if err != nil {
@@ -265,7 +265,7 @@ func isPackageManagerFile(filename string) bool {
 		"sbt.build", "build.sbt", // scala
 		"cargo.toml", "cargo.lock", // rust
 	}
-	
+
 	for _, file := range packageFiles {
 		if filename == file {
 			return true

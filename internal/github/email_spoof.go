@@ -21,7 +21,7 @@ func IsValidEmail(input string) bool {
 	return emailRegex.MatchString(input)
 }
 
-func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email string) (string, error) {
+func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email string, token string) (string, error) {
 	color.Yellow("[@] Attempting email spoofing method for: %s", email)
 	
 	user, _, err := client.Users.Get(ctx, "")
@@ -66,8 +66,9 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 		return "", fmt.Errorf("failed to initialize git repo: %v", err)
 	}
 	
-	cloneURL := createdRepo.GetCloneURL()
-	if err := runGitCommand(repoPath, "remote", "add", "origin", cloneURL); err != nil {
+	// Use authenticated clone URL with token
+	authenticatedURL := fmt.Sprintf("https://%s@github.com/%s/%s.git", token, user.GetLogin(), repoName)
+	if err := runGitCommand(repoPath, "remote", "add", "origin", authenticatedURL); err != nil {
 		return "", fmt.Errorf("failed to add remote: %v", err)
 	}
 
@@ -101,6 +102,9 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 	if err := runGitCommand(repoPath, "push", "-u", "origin", "master"); err != nil {
 		return "", fmt.Errorf("failed to push: %v", err)
 	}
+
+	// Give GitHub API time to sync after push
+	time.Sleep(3 * time.Second)
 
 	commits, _, err := client.Repositories.ListCommits(ctx, createdRepo.GetOwner().GetLogin(), repoName, &github.CommitsListOptions{
 		ListOptions: github.ListOptions{PerPage: 1},
