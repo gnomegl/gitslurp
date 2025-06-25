@@ -169,16 +169,16 @@ func CheckDeleteRepoPermissions(ctx context.Context, client *github.Client) (boo
 		}
 		return false, fmt.Errorf("error checking permissions: %v", err)
 	}
-	
+
 	if resp == nil || resp.Header == nil {
 		return false, nil
 	}
-	
+
 	scopes := resp.Header.Get("X-OAuth-Scopes")
 	if scopes == "" {
 		return false, nil
 	}
-	
+
 	// Check if delete_repo scope is present
 	scopeList := strings.Split(scopes, ", ")
 	for _, scope := range scopeList {
@@ -187,7 +187,7 @@ func CheckDeleteRepoPermissions(ctx context.Context, client *github.Client) (boo
 			return true, nil
 		}
 	}
-	
+
 	return false, nil
 }
 
@@ -226,25 +226,23 @@ func DisplayRateLimit(ctx context.Context, client *github.Client) {
 	resetLocal := rateLimitInfo.ResetTime.In(now.Location())
 	timeUntilReset := resetLocal.Sub(now)
 
-	fmt.Println("\n" + strings.Repeat("─", 50))
-	color.HiCyan("GitHub API Rate Limit Status")
 	fmt.Println(strings.Repeat("─", 50))
-	
+
 	percentage := float64(rateLimitInfo.Remaining) / float64(rateLimitInfo.Limit) * 100
 	if percentage > 50 {
-		color.HiGreen("Remaining queries: %d/%d (%.1f%%)", 
+		color.HiGreen("Remaining queries: %d/%d (%.1f%%)",
 			rateLimitInfo.Remaining, rateLimitInfo.Limit, percentage)
 	} else if percentage > 20 {
-		color.HiYellow("Remaining queries: %d/%d (%.1f%%)", 
+		color.HiYellow("Remaining queries: %d/%d (%.1f%%)",
 			rateLimitInfo.Remaining, rateLimitInfo.Limit, percentage)
 	} else {
-		color.HiRed("Remaining queries: %d/%d (%.1f%%)", 
+		color.HiRed("Remaining queries: %d/%d (%.1f%%)",
 			rateLimitInfo.Remaining, rateLimitInfo.Limit, percentage)
 	}
 
 	if timeUntilReset > 0 {
-		color.HiBlue("Rate limit resets at: %s (in %v)", 
-			resetLocal.Format("2006-01-02 15:04:05 MST"), 
+		color.HiBlue("Rate limit resets at: %s (in %v)",
+			resetLocal.Format("2006-01-02 15:04:05 MST"),
 			timeUntilReset.Round(time.Second))
 	} else {
 		color.HiGreen("Rate limit has already reset")
@@ -252,9 +250,6 @@ func DisplayRateLimit(ctx context.Context, client *github.Client) {
 
 	if rateLimitInfo.Remaining < 100 {
 		color.Yellow("\n⚠️  Warning: Low on API queries. Consider waiting or using a different token.")
-	} else if rateLimitInfo.Remaining > 4000 {
-		color.Green("\n✅ Plenty of API queries remaining for continued use.")
 	}
-
 	fmt.Println()
 }
