@@ -65,18 +65,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 	userIdentifiers := o.buildUserIdentifiers(username, lookupEmail, user)
 
-	var emails map[string]*models.EmailDetails
-	if o.config.DeepCrawl {
-		emails = github.RateLimitedProcessRepos(ctx, o.client, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
-	} else {
-		emails = github.ProcessUserEvents(ctx, o.client, username, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
-		// If no events found, fall back to processing recent commits from repos (rate limited)
-		if len(emails) == 0 && len(repos) > 0 {
-			color.Blue("⚡ No recent events found, falling back to light repository processing")
-			color.Yellow("💡 Tip: Use --deep flag for complete history (slower but thorough)")
-			emails = github.ProcessReposLimited(ctx, o.client, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
-		}
-	}
+	emails := github.RateLimitedProcessRepos(ctx, o.client, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
 
 	if len(gists) > 0 && (o.config.CheckSecrets || cfg.ShowInteresting) {
 		emails = o.processGists(ctx, gists, emails, &cfg)
@@ -101,10 +90,10 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 		// Check for delete_repo permissions when targeting an email
 		hasDeleteRepo, permErr := github.CheckDeleteRepoPermissions(ctx, o.client)
 		if permErr != nil {
-			color.Yellow("⚠️  Warning: Could not check token permissions: %v", permErr)
+			color.Yellow("[!]  Warning: Could not check token permissions: %v", permErr)
 		} else if !hasDeleteRepo {
-			color.Red("\n❌ Your GitHub token lacks delete_repo permissions required for email-based investigations")
-			color.Yellow("📋 To update your token permissions:")
+			color.Red("\n[x] Your GitHub token lacks delete_repo permissions required for email-based investigations")
+			color.Yellow("[:] To update your token permissions:")
 			fmt.Println("1. Visit: https://github.com/settings/tokens")
 			fmt.Println("2. Click on your existing gitslurp token")
 			fmt.Println("3. Check the 'delete_repo' scope")
@@ -116,31 +105,31 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 
 		user, err := github.GetUserByEmail(ctx, o.client, o.config.Target)
 		if err != nil {
-			color.Red("❌ API search error: %v", err)
-			color.Yellow("🔄 Attempting email spoofing method...")
+			color.Red("[x] API search error: %v", err)
+			color.Yellow("[~] Attempting email spoofing method...")
 			
 			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target)
 			if spoofErr != nil {
-				color.Red("❌ Email spoofing failed: %v", spoofErr)
+				color.Red("[x] Email spoofing failed: %v", spoofErr)
 				return "", "", fmt.Errorf("failed to resolve email %s: %v", o.config.Target, spoofErr)
 			}
 			
 			username = spoofedUsername
-			color.Green("✅ Found GitHub user via spoofing: %s", username)
+			color.Green("[✓] Found GitHub user via spoofing: %s", username)
 		} else if user == nil {
-			color.Yellow("🔄 No user found via API search, attempting email spoofing...")
+			color.Yellow("[~] No user found via API search, attempting email spoofing...")
 			
 			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target)
 			if spoofErr != nil {
-				color.Red("❌ Email spoofing failed: %v", spoofErr)
+				color.Red("[x] Email spoofing failed: %v", spoofErr)
 				return "", "", fmt.Errorf("no GitHub user found for email: %s", o.config.Target)
 			}
 			
 			username = spoofedUsername
-			color.Green("✅ Found GitHub user via spoofing: %s", username)
+			color.Green("[✓] Found GitHub user via spoofing: %s", username)
 		} else {
 			username = user.GetLogin()
-			color.Green("✅ Found GitHub user via API: %s", username)
+			color.Green("[✓] Found GitHub user via API: %s", username)
 		}
 	} else {
 		color.Blue("\nTarget user: %s", username)
@@ -156,22 +145,22 @@ func (o *Orchestrator) fetchUserInfo(ctx context.Context, username, lookupEmail 
 
 	isOrg, err := github.IsOrganization(ctx, o.client, username)
 	if err != nil {
-		color.Red("❌ Error checking organization status: %v", err)
+		color.Red("[x] Error checking organization status: %v", err)
 		return nil, false, err
 	}
 
 	if isOrg {
-		color.Green("✅ Organization detected: %s", username)
+		color.Green("[✓] Organization detected: %s", username)
 	}
 
 	user, _, err := o.client.Users.Get(ctx, username)
 	if err != nil {
-		color.Red("❌ Error fetching details: %v", err)
+		color.Red("[x] Error fetching details: %v", err)
 		return nil, false, err
 	}
 
 	if !isOrg {
-		color.Green("✅ User detected: %s", user.GetLogin())
+		color.Green("[✓] User detected: %s", user.GetLogin())
 	}
 
 	return user, isOrg, nil
@@ -187,27 +176,27 @@ func (o *Orchestrator) fetchReposAndGists(ctx context.Context, username string, 
 	} else {
 		repos, err = github.FetchReposWithUser(ctx, o.client, username, cfg, user)
 		if err != nil {
-			color.Red("❌ Error: %v", err)
+			color.Red("[x] Error: %v", err)
 			return nil, nil, err
 		}
 
 		// Gist checking disabled for performance
 		// gists, err = github.FetchGists(ctx, o.client, username, cfg)
 		// if err != nil {
-		//	color.Yellow("⚠️  Warning: Could not fetch gists: %v", err)
+		//	color.Yellow("[!]  Warning: Could not fetch gists: %v", err)
 		// }
 	}
 
 	if err != nil {
-		color.Red("❌ Error: %v", err)
+		color.Red("[x] Error: %v", err)
 		return nil, nil, err
 	}
 
 	if len(repos) == 0 && len(gists) == 0 {
 		if isOrg {
-			color.Red("❌ No public repositories found for organization: %s", username)
+			color.Red("[x] No public repositories found for organization: %s", username)
 		} else {
-			color.Red("❌ No public repositories or gists found for user: %s", username)
+			color.Red("[x] No public repositories or gists found for user: %s", username)
 		}
 		return nil, nil, fmt.Errorf("no repositories or gists found")
 	}

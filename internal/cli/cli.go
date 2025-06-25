@@ -62,10 +62,6 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Aliases: []string{"p"},
 				Usage:   "Show user profile only, skip repository analysis",
 			},
-			&cli.BoolFlag{
-				Name:    "deep",
-				Usage:   "🔍 Deep crawl all commits (slower, uses more API calls, default: recent events only)",
-			},
 		},
 		Action:    action,
 		ArgsUsage: "<username|email>",
