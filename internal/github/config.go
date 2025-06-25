@@ -9,6 +9,7 @@ type Config struct {
 	MaxConcurrentRequests int
 	PerPage               int
 	SkipNodeModules       bool
+	QuickMode             bool
 }
 
 // DefaultConfig returns a default configuration
@@ -21,5 +22,6 @@ func DefaultConfig() Config {
 		MaxConcurrentRequests: 5,
 		PerPage:               100,
 		SkipNodeModules:       true,
+		QuickMode:             false,
 	}
 }
