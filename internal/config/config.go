@@ -12,7 +12,6 @@ type AppConfig struct {
 	ProfileOnly     bool
 	ShowWatchers    bool
 	ShowForkers     bool
-	DeepCrawl       bool
 	Target          string
 }
 
@@ -29,7 +28,6 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		ProfileOnly:     c.Bool("profile-only"),
 		ShowWatchers:    c.Bool("show-watchers"),
 		ShowForkers:     c.Bool("show-forkers"),
-		DeepCrawl:       c.Bool("deep"),
 		Target:          c.Args().First(),
 	}, nil
 }

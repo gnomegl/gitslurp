@@ -22,7 +22,7 @@ func IsValidEmail(input string) bool {
 }
 
 func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email string) (string, error) {
-	color.Yellow("📧 Attempting email spoofing method for: %s", email)
+	color.Yellow("[@] Attempting email spoofing method for: %s", email)
 	
 	user, _, err := client.Users.Get(ctx, "")
 	if err != nil {
@@ -50,10 +50,10 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 	}
 	
 	defer func() {
-		color.Yellow("🗑️  Cleaning up temporary repository...")
+		color.Yellow("[-]  Cleaning up temporary repository...")
 		_, err := client.Repositories.Delete(ctx, user.GetLogin(), repoName)
 		if err != nil {
-			color.Red("⚠️  Warning: Failed to delete temporary repository %s: %v", repoName, err)
+			color.Red("[!]  Warning: Failed to delete temporary repository %s: %v", repoName, err)
 		}
 	}()
 
@@ -114,12 +114,12 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 	commit, _, err := client.Repositories.GetCommit(ctx, createdRepo.GetOwner().GetLogin(), repoName, commitSHA, nil)
 	if err == nil && commit.GetAuthor() != nil && commit.GetAuthor().GetLogin() != "" {
 		username := commit.GetAuthor().GetLogin()
-		color.Green("✅ Found username via API: %s", username)
+		color.Green("[✓] Found username via API: %s", username)
 		return username, nil
 	}
 
 	// if api doesn't provide username, temporarily make repo public and scrape
-	color.Yellow("🔓 Temporarily making repository public for web scraping...")
+	color.Yellow("[o] Temporarily making repository public for web scraping...")
 	
 	repoUpdate := &github.Repository{
 		Private: github.Bool(false),
@@ -138,7 +138,7 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 		return "", fmt.Errorf("failed to scrape username: %v", err)
 	}
 
-	color.Green("✅ Found username via scraping: %s", username)
+	color.Green("[✓] Found username via scraping: %s", username)
 	return username, nil
 }
 

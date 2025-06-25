@@ -64,7 +64,7 @@ func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository
 func (p *RepoEventProcessor) collectWatchers(ctx context.Context, repo *gh.Repository, watchers map[string]struct{}, opts *gh.ListOptions) error {
 	stargazers, _, err := p.client.Activity.ListStargazers(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 	if err != nil {
-		color.Yellow("⚠️  Warning: Could not fetch stargazers for %s: %v", repo.GetFullName(), err)
+		color.Yellow("[!]  Warning: Could not fetch stargazers for %s: %v", repo.GetFullName(), err)
 		return err
 	}
 	for _, stargazer := range stargazers {
@@ -78,7 +78,7 @@ func (p *RepoEventProcessor) collectForkers(ctx context.Context, repo *gh.Reposi
 		ListOptions: *opts,
 	})
 	if err != nil {
-		color.Yellow("⚠️  Warning: Could not fetch forks for %s: %v", repo.GetFullName(), err)
+		color.Yellow("[!]  Warning: Could not fetch forks for %s: %v", repo.GetFullName(), err)
 		return err
 	}
 	for _, fork := range forks {
