@@ -536,9 +536,9 @@ func displaySummary(targetAccounts, similarAccounts map[string][]string) {
 	if len(targetAccounts) > 0 {
 		fmt.Println("\n📍  Target User Accounts:")
 		for email, names := range targetAccounts {
-			fmt.Printf("\n  • %s", email)
+			fmt.Printf("  • %s", email)
 			if len(names) > 0 {
-				color.Green("\n    Names: %s", strings.Join(names, ", "))
+				color.Green("    Names: %s", strings.Join(names, ", "))
 			}
 		}
 	}
