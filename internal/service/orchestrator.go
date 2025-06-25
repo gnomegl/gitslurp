@@ -78,6 +78,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 	display.Results(emails, o.config.ShowDetails, o.config.CheckSecrets, lookupEmail, username, user, o.config.ShowTargetOnly, isOrg, &cfg)
 
+	github.DisplayRateLimit(ctx, o.client)
+
 	return nil
 }
 
