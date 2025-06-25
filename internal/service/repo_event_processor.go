@@ -20,8 +20,8 @@ func NewRepoEventProcessor(client *gh.Client, target string) *RepoEventProcessor
 	}
 }
 
-func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository, showWatchers, showForkers bool) error {
-	watchers := make(map[string]struct{})
+func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository, showStargazers, showForkers bool) error {
+	stargazers := make(map[string]struct{})
 	forkers := make(map[string]struct{})
 
 	opts := &gh.ListOptions{
@@ -29,8 +29,8 @@ func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository
 	}
 
 	for _, repo := range repos {
-		if showWatchers {
-			if err := p.collectWatchers(ctx, repo, watchers, opts); err != nil {
+		if showStargazers {
+			if err := p.collectStargazers(ctx, repo, stargazers, opts); err != nil {
 				continue
 			}
 		}
@@ -51,9 +51,9 @@ func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository
 		}
 	}
 
-	if showWatchers {
-		watchersList := sortedKeys(watchers)
-		if err := orchestrator.outputEventList(watchersList, p.target+"_watchers.txt", "Repository Watchers:", "👁️"); err != nil {
+	if showStargazers {
+		stargazersList := sortedKeys(stargazers)
+		if err := orchestrator.outputEventList(stargazersList, p.target+"_stargazers.txt", "Repository Stargazers:", "⭐"); err != nil {
 			return err
 		}
 	}
@@ -61,14 +61,14 @@ func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository
 	return nil
 }
 
-func (p *RepoEventProcessor) collectWatchers(ctx context.Context, repo *gh.Repository, watchers map[string]struct{}, opts *gh.ListOptions) error {
-	stargazers, _, err := p.client.Activity.ListStargazers(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+func (p *RepoEventProcessor) collectStargazers(ctx context.Context, repo *gh.Repository, stargazers map[string]struct{}, opts *gh.ListOptions) error {
+	stargazerList, _, err := p.client.Activity.ListStargazers(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 	if err != nil {
 		color.Yellow("[!]  Warning: Could not fetch stargazers for %s: %v", repo.GetFullName(), err)
 		return err
 	}
-	for _, stargazer := range stargazers {
-		watchers[stargazer.User.GetLogin()] = struct{}{}
+	for _, stargazer := range stargazerList {
+		stargazers[stargazer.User.GetLogin()] = struct{}{}
 	}
 	return nil
 }

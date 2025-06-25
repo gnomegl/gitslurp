@@ -57,7 +57,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		return err
 	}
 
-	if o.config.ShowWatchers || o.config.ShowForkers {
+	if o.config.ShowStargazers || o.config.ShowForkers {
 		err = o.processRepoEvents(ctx, repos)
 		if err != nil {
 			return err
@@ -209,7 +209,7 @@ func (o *Orchestrator) fetchReposAndGists(ctx context.Context, username string, 
 
 func (o *Orchestrator) processRepoEvents(ctx context.Context, repos []*gh.Repository) error {
 	processor := NewRepoEventProcessor(o.client, o.config.Target)
-	return processor.Process(ctx, repos, o.config.ShowWatchers, o.config.ShowForkers)
+	return processor.Process(ctx, repos, o.config.ShowStargazers, o.config.ShowForkers)
 }
 
 func (o *Orchestrator) buildUserIdentifiers(username, lookupEmail string, user *gh.User) map[string]bool {

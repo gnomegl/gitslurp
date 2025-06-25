@@ -2,6 +2,8 @@ package config
 
 import (
 	"github.com/urfave/cli/v2"
+	"os"
+	"strings"
 )
 
 type AppConfig struct {
@@ -10,15 +12,57 @@ type AppConfig struct {
 	ShowTargetOnly  bool
 	ShowInteresting bool
 	ProfileOnly     bool
-	ShowWatchers    bool
+	ShowStargazers  bool
 	ShowForkers     bool
 	QuickMode       bool
 	Target          string
 }
 
+// extracts the username/email from command line args, ignoring flags
+func findTarget() (string, error) {
+	args := os.Args[1:] 
+	var targets []string
+
+	// known flags that take values
+  // TODO: enumerate the flags for this
+	flagsWithValues := map[string]bool{
+		"-t": true, "--token": true,
+	}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		if strings.HasPrefix(arg, "-") {
+			if flagsWithValues[arg] {
+				if i+1 < len(args) {
+					i++
+				}
+			}
+			continue
+		}
+
+		// this is a non-flag argument, could be our target
+		targets = append(targets, arg)
+	}
+
+	if len(targets) == 0 {
+		return "", cli.Exit("Error: No username or email provided", 1)
+	}
+
+	if len(targets) > 1 {
+		return "", cli.Exit("Error: Only one username or email should be provided", 1)
+	}
+
+	return targets[0], nil
+}
+
 func ParseConfig(c *cli.Context) (*AppConfig, error) {
-	if c.NArg() == 0 {
-		return nil, cli.ShowAppHelp(c)
+	target, err := findTarget()
+	if err != nil {
+		if len(os.Args) <= 1 {
+			return nil, cli.ShowAppHelp(c)
+		}
+		return nil, err
 	}
 
 	return &AppConfig{
@@ -27,9 +71,10 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		ShowTargetOnly:  false,
 		ShowInteresting: c.Bool("interesting"),
 		ProfileOnly:     c.Bool("profile-only"),
-		ShowWatchers:    c.Bool("show-watchers"),
+		ShowStargazers:  c.Bool("show-stargazers"),
 		ShowForkers:     c.Bool("show-forkers"),
 		QuickMode:       c.Bool("quick"),
-		Target:          c.Args().First(),
+		Target:          target,
 	}, nil
 }
+
