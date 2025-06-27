@@ -7,11 +7,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gnomegl/gitslurp/internal/models"
-	"github.com/gnomegl/gitslurp/internal/scanner"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"git.sr.ht/~gnome/gitslurp/internal/models"
+	"git.sr.ht/~gnome/gitslurp/internal/scanner"
+	"git.sr.ht/~gnome/gitslurp/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/schollz/progressbar/v3"
+	"slices"
 )
 
 func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) models.CommitInfo {
@@ -271,12 +272,7 @@ func isPackageManagerFile(filename string) bool {
 		"cargo.toml", "cargo.lock", // rust
 	}
 
-	for _, file := range packageFiles {
-		if filename == file {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(packageFiles, filename)
 }
 
 // email -> commit mapping

@@ -5,11 +5,11 @@ import (
 	"log"
 	"os"
 
-	"github.com/gnomegl/gitslurp/internal/auth"
-	cliPkg "github.com/gnomegl/gitslurp/internal/cli"
-	"github.com/gnomegl/gitslurp/internal/config"
-	"github.com/gnomegl/gitslurp/internal/github"
-	"github.com/gnomegl/gitslurp/internal/service"
+	"git.sr.ht/~gnome/gitslurp/internal/auth"
+	cliPkg "git.sr.ht/~gnome/gitslurp/internal/cli"
+	"git.sr.ht/~gnome/gitslurp/internal/config"
+	"git.sr.ht/~gnome/gitslurp/internal/github"
+	"git.sr.ht/~gnome/gitslurp/internal/service"
 	"github.com/urfave/cli/v2"
 )
 
@@ -22,13 +22,11 @@ Options:
    {{end}}`
 
 func runApp(c *cli.Context) error {
-	// Parse config first to validate arguments
 	appConfig, err := config.ParseConfig(c)
 	if err != nil {
 		return err
 	}
-	
-	// Safety check - this should never happen if ParseConfig works correctly
+
 	if appConfig == nil {
 		return nil
 	}
@@ -39,7 +37,6 @@ func runApp(c *cli.Context) error {
 		return err
 	}
 
-	// Get the token to pass to orchestrator
 	token := github.GetToken(c)
 	orchestrator := service.NewOrchestrator(client, appConfig, token)
 	return orchestrator.Run(ctx)
@@ -47,9 +44,9 @@ func runApp(c *cli.Context) error {
 
 func main() {
 	log.SetFlags(0)
-	
+
 	app := cliPkg.NewApp(runApp)
-	
+
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}

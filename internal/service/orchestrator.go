@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/config"
-	"github.com/gnomegl/gitslurp/internal/display"
-	"github.com/gnomegl/gitslurp/internal/github"
-	"github.com/gnomegl/gitslurp/internal/models"
+	"git.sr.ht/~gnome/gitslurp/internal/config"
+	"git.sr.ht/~gnome/gitslurp/internal/display"
+	"git.sr.ht/~gnome/gitslurp/internal/github"
+	"git.sr.ht/~gnome/gitslurp/internal/models"
 	gh "github.com/google/go-github/v57/github"
 )
 
