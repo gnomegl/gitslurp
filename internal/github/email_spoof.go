@@ -50,10 +50,10 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 	}
 	
 	defer func() {
-		color.Yellow("[-]  Cleaning up temporary repository...")
+		color.Yellow("[-] Cleaning up temporary repository...")
 		_, err := client.Repositories.Delete(ctx, user.GetLogin(), repoName)
 		if err != nil {
-			color.Red("[!]  Warning: Failed to delete temporary repository %s: %v", repoName, err)
+			color.Red("[!] Warning: Failed to delete temporary repository %s: %v", repoName, err)
 		}
 	}()
 
