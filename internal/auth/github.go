@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gnomegl/gitslurp/internal/github"
+	"git.sr.ht/~gnome/gitslurp/internal/github"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/urfave/cli/v2"
 )
