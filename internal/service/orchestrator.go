@@ -53,6 +53,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	cfg := github.DefaultConfig()
 	cfg.ShowInteresting = o.config.ShowInteresting
 	cfg.QuickMode = o.config.QuickMode
+	cfg.TimestampAnalysis = o.config.TimestampAnalysis
 
 	repos, gists, err := o.fetchReposAndGists(ctx, username, isOrg, &cfg, user)
 	if err != nil {

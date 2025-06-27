@@ -15,6 +15,7 @@ type AppConfig struct {
 	ShowStargazers  bool
 	ShowForkers     bool
 	QuickMode       bool
+	TimestampAnalysis bool
 	Target          string
 }
 
@@ -74,6 +75,7 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		ShowStargazers:  c.Bool("show-stargazers"),
 		ShowForkers:     c.Bool("show-forkers"),
 		QuickMode:       c.Bool("quick"),
+		TimestampAnalysis: c.Bool("timestamp-analysis"),
 		Target:          target,
 	}, nil
 }

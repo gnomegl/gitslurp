@@ -10,6 +10,7 @@ type Config struct {
 	PerPage               int
 	SkipNodeModules       bool
 	QuickMode             bool
+	TimestampAnalysis     bool
 }
 
 // DefaultConfig returns a default configuration
@@ -23,5 +24,6 @@ func DefaultConfig() Config {
 		PerPage:               100,
 		SkipNodeModules:       true,
 		QuickMode:             false,
+		TimestampAnalysis:     false,
 	}
 }

@@ -17,6 +17,21 @@ type CommitInfo struct {
 	IsOwnRepo     bool
 	IsFork        bool
 	RepoName      string
+	TimestampAnalysis *TimestampAnalysis
+}
+
+type TimestampAnalysis struct {
+	IsUnusualHour    bool
+	IsWeekend        bool
+	HourOfDay        int
+	DayOfWeek        time.Weekday
+	IsNightOwl       bool
+	IsEarlyBird      bool
+	TimeZoneHint     string
+	CommitTimezone   string
+	LocalHourOfDay   int
+	UTCTime          time.Time
+	LocalTime        time.Time
 }
 
 type EmailDetails struct {
