@@ -67,6 +67,11 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Aliases: []string{"q"},
 				Usage:   "⚡ Quick mode - fetch ~50 most recent commits per repo",
 			},
+			&cli.BoolFlag{
+				Name:    "timestamp-analysis",
+				Aliases: []string{"T"},
+				Usage:   "🕐 Analyze commit timestamps for unusual patterns",
+			},
 		},
 		Action:    action,
 		ArgsUsage: "<username|email>",

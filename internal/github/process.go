@@ -9,6 +9,7 @@ import (
 
 	"github.com/gnomegl/gitslurp/internal/models"
 	"github.com/gnomegl/gitslurp/internal/scanner"
+	"github.com/gnomegl/gitslurp/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/schollz/progressbar/v3"
 )
@@ -25,6 +26,10 @@ func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) 
 			info.AuthorName = commit.Commit.Author.GetName()
 			info.AuthorEmail = commit.Commit.Author.GetEmail()
 			info.AuthorDate = commit.Commit.Author.GetDate().Time
+			
+			if cfg.TimestampAnalysis {
+				info.TimestampAnalysis = utils.AnalyzeTimestamp(info.AuthorDate)
+			}
 		}
 
 		if commit.Commit.Committer != nil {

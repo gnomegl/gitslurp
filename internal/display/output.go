@@ -5,10 +5,12 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"golang.org/x/term"
 )
@@ -434,6 +436,11 @@ func displayResults(ctx *Context, result *EmailProcessResult) {
 	fmt.Println("\nCollected author information:")
 
 	displayTotals(ctx.ShowTargetOnly, result.totalCommits, result.totalContributors)
+	
+	if ctx.Cfg.TimestampAnalysis {
+		displayTimestampAnalysis(ctx.Emails, ctx.UserIdentifiers)
+	}
+	
 	displaySummary(result.targetAccounts, result.similarAccounts)
 }
 
@@ -771,4 +778,236 @@ func displaySummary(targetAccounts, similarAccounts map[string][]string) {
 		}
 	}
 	fmt.Println()
+}
+
+// displayTimestampAnalysis shows timestamp analysis results
+func displayTimestampAnalysis(emails map[string]*models.EmailDetails, userIdentifiers map[string]bool) {
+	color.HiCyan("\n🕐 TIMESTAMP ANALYSIS")
+	fmt.Println(strings.Repeat("─", 60))
+	
+	targetCommits := make(map[string][]models.CommitInfo)
+	
+	for email, details := range emails {
+		isTargetUser := userIdentifiers[email]
+		if !isTargetUser {
+			for name := range details.Names {
+				if userIdentifiers[name] {
+					isTargetUser = true
+					break
+				}
+			}
+		}
+		
+		if isTargetUser {
+			for _, commits := range details.Commits {
+				targetCommits[email] = append(targetCommits[email], commits...)
+			}
+		}
+	}
+	
+	if len(targetCommits) == 0 {
+		color.Yellow("No target user commits found for analysis.")
+		return
+	}
+	
+	var allTargetCommits []models.CommitInfo
+	for _, commits := range targetCommits {
+		allTargetCommits = append(allTargetCommits, commits...)
+	}
+	
+	patterns := utils.GetTimestampPatterns(allTargetCommits)
+	
+	fmt.Printf("\n📊 Target User Commit Patterns (%d commits):\n", patterns["total_commits"])
+	displayGeneralPatterns(patterns)
+	
+	// Display aggregated hourly graph for all target commits
+	if len(allTargetCommits) >= 10 {
+		fmt.Println()
+		displayAggregatedHourlyGraph(patterns)
+	}
+	
+	fmt.Println("\n📍 Individual Target User Analysis:")
+	for email, commits := range targetCommits {
+		if len(commits) >= 3 {
+			displayUserTimestampAnalysis(email, commits)
+		}
+	}
+	
+	displaySuspiciousPatterns(allTargetCommits)
+}
+
+func displayGeneralPatterns(patterns map[string]interface{}) {
+	if unusualPct, ok := patterns["unusual_hour_percentage"].(float64); ok && unusualPct > 0 {
+		color.Yellow("  • %.1f%% commits during unusual hours (10pm-6am local time)", unusualPct)
+	}
+	
+	if weekendPct, ok := patterns["weekend_percentage"].(float64); ok && weekendPct > 0 {
+		color.Cyan("  • %.1f%% commits on weekends", weekendPct)
+	}
+	
+	if nightOwlPct, ok := patterns["night_owl_percentage"].(float64); ok && nightOwlPct > 10 {
+		color.Magenta("  • %.1f%% night owl commits (10pm-2am local time)", nightOwlPct)
+	}
+	
+	if earlyBirdPct, ok := patterns["early_bird_percentage"].(float64); ok && earlyBirdPct > 10 {
+		color.Green("  • %.1f%% early bird commits (5am-7am local time)", earlyBirdPct)
+	}
+	
+	if mostActiveHour, ok := patterns["most_active_hour"].(int); ok {
+		color.Blue("  • Most active hour: %02d:00 local time", mostActiveHour)
+	}
+	
+	if mostActiveDay, ok := patterns["most_active_day"].(time.Weekday); ok {
+		color.Blue("  • Most active day: %s", mostActiveDay.String())
+	}
+	
+	if mostActiveTZ, ok := patterns["most_active_timezone"].(string); ok && mostActiveTZ != "" {
+		color.HiBlue("  • Most common timezone: %s", mostActiveTZ)
+	}
+	
+	if tzDist, ok := patterns["timezone_distribution"].(map[string]int); ok && len(tzDist) > 1 {
+		color.HiYellow("  • Multiple timezones detected: %d different zones", len(tzDist))
+		displayTimezoneDistribution(tzDist)
+	}
+}
+
+func displayTimezoneDistribution(tzDist map[string]int) {
+	type tzEntry struct {
+		zone  string
+		count int
+	}
+	
+	var zones []tzEntry
+	for tz, count := range tzDist {
+		zones = append(zones, tzEntry{tz, count})
+	}
+	
+	sort.Slice(zones, func(i, j int) bool {
+		return zones[i].count > zones[j].count
+	})
+	
+	for i, zone := range zones {
+		if i >= 3 {
+			break
+		}
+		color.White("    - %s: %d commits", zone.zone, zone.count)
+	}
+}
+
+func displayUserTimestampAnalysis(email string, commits []models.CommitInfo) {
+	patterns := utils.GetTimestampPatterns(commits)
+	
+	color.HiWhite("  %s (%d commits):", email, len(commits))
+	
+	if mostActiveTZ, ok := patterns["most_active_timezone"].(string); ok && mostActiveTZ != "" {
+		color.HiBlue("    🌍 Primary timezone: %s", mostActiveTZ)
+	}
+	
+	if tzDist, ok := patterns["timezone_distribution"].(map[string]int); ok && len(tzDist) > 1 {
+		color.HiYellow("    📍 Multiple timezones: %d zones detected", len(tzDist))
+	}
+	
+	if unusualPct, ok := patterns["unusual_hour_percentage"].(float64); ok && unusualPct > 30 {
+		color.HiYellow("    ⚠️  %.1f%% unusual hour commits (in stated timezone)", unusualPct)
+	}
+	
+	if nightOwlPct, ok := patterns["night_owl_percentage"].(float64); ok && nightOwlPct > 20 {
+		color.HiMagenta("    🌙 %.1f%% night owl pattern (10pm-2am local)", nightOwlPct)
+	}
+	
+	if earlyBirdPct, ok := patterns["early_bird_percentage"].(float64); ok && earlyBirdPct > 20 {
+		color.HiGreen("    🌅 %.1f%% early bird pattern (5am-7am local)", earlyBirdPct)
+	}
+	
+	if mostActiveHour, ok := patterns["most_active_hour"].(int); ok {
+		color.HiCyan("    ⏰ Most active: %02d:00 local time", mostActiveHour)
+	}
+}
+
+func displayAggregatedHourlyGraph(patterns map[string]interface{}) {
+	hourDist, ok := patterns["hour_distribution"].(map[int]int)
+	if !ok || len(hourDist) == 0 {
+		return
+	}
+	
+	// Find max commits for scaling
+	maxCommits := 0
+	for _, count := range hourDist {
+		if count > maxCommits {
+			maxCommits = count
+		}
+	}
+	
+	if maxCommits == 0 {
+		return
+	}
+	
+	color.HiWhite("📊 Aggregated Hourly Activity Timeline (All Target Users):")
+	
+	// Scale factor for ASCII graph (max 25 chars wide)
+	scale := 25.0 / float64(maxCommits)
+	
+	// Display graph with consistent spacing for all hours
+	for hour := 0; hour < 24; hour++ {
+		count := hourDist[hour]
+		barLength := int(float64(count) * scale)
+		
+		// Create bar
+		bar := strings.Repeat("█", barLength)
+		
+		// Always display each hour with consistent spacing
+		fmt.Printf("%02d:00 │", hour)
+		
+		if count > 0 {
+			// Display bar with count to the right
+			var coloredBar string
+			if hour >= 22 || hour <= 2 {
+				coloredBar = color.HiRedString("%-25s", bar)
+			} else if hour >= 5 && hour <= 7 {
+				coloredBar = color.HiGreenString("%-25s", bar)
+			} else if hour >= 9 && hour <= 17 {
+				coloredBar = color.HiBlueString("%-25s", bar)
+			} else {
+				coloredBar = color.HiYellowString("%-25s", bar)
+			}
+			fmt.Printf("%s %d\n", coloredBar, count)
+		} else {
+			fmt.Printf("%-25s\n", "")
+		}
+	}
+	
+	color.White("     └─────────────────────────────┘")
+	color.White("     🔴 Night Owl  🟢 Early Bird  🔵 Work Hours  🟡 Other")
+}
+
+func displaySuspiciousPatterns(commits []models.CommitInfo) {
+	suspiciousCommits := make([]models.CommitInfo, 0)
+	
+	for _, commit := range commits {
+		if commit.TimestampAnalysis != nil && commit.TimestampAnalysis.IsUnusualHour {
+			suspiciousCommits = append(suspiciousCommits, commit)
+		}
+	}
+	
+	if len(suspiciousCommits) > 0 && len(suspiciousCommits) <= 15 {
+		fmt.Println("\n🔍 Unusual Hour Commits (Target Users):")
+		
+		sort.Slice(suspiciousCommits, func(i, j int) bool {
+			return suspiciousCommits[i].AuthorDate.After(suspiciousCommits[j].AuthorDate)
+		})
+		
+		for i, commit := range suspiciousCommits {
+			if i >= 8 {
+				break
+			}
+			
+			localTimeStr := commit.AuthorDate.Format("2006-01-02 15:04:05")
+			color.Yellow("  • %s at %s (%s)", commit.Hash[:8], localTimeStr, commit.TimestampAnalysis.CommitTimezone)
+			if commit.TimestampAnalysis.TimeZoneHint != "" {
+				color.White("    %s", commit.TimestampAnalysis.TimeZoneHint)
+			}
+		}
+	} else if len(suspiciousCommits) > 15 {
+		fmt.Printf("\n🔍 Found %d unusual hour commits (showing pattern summary above)\n", len(suspiciousCommits))
+	}
 }
