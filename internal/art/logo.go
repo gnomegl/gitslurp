@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"git.sr.ht/~gnome/gitslurp/internal/utils"
 )
 
 const LogoMain = `   _____   _   _____  _                    
