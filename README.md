@@ -3,7 +3,7 @@
 # gitslurp 🔍
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/gnomegl/gitslurp)](https://golang.org/doc/devel/release.html)
+[![Go Version](https://img.shields.io/badge/Go-1.22+-blue.svg)](https://golang.org/)
 
 </div>
 
@@ -25,7 +25,7 @@ A powerful command-line tool that analyzes GitHub user activity and highlights t
 
 ```bash
 # Quick install
-go install github.com/gnomegl/gitslurp@latest
+go install git.sr.ht/~gnome/gitslurp@latest
 
 # Basic usage
 gitslurp soxoj
@@ -36,14 +36,14 @@ gitslurp soxoj
 - 📊 **Comprehensive Commit History**: View all commits made by a user across public repositories
 - 🎯 **Visual Highlighting**: Easily identify target user's commits with color-coding and emojis
 - 👥 **Multiple Identity Support**: Detects and groups commits from different email addresses and names
-- 🐽 **Advanced Secret Detection**: Powered by [TruffleHog](https://github.com/trufflesecurity/trufflehog) regex patterns for enterprise-grade secret detection
+- 🐽 **Advanced Secret Detection**: Powered by TruffleHog-inspired regex patterns for enterprise-grade secret detection
 - ⭐ **Interesting Patterns**: Find URLs, UUIDs, IPs, and other interesting patterns in commit messages
 - 📦 **Repository Context**: Shows if commits are in user's own repositories or forks
 - 🏢 **Organization Scanning**: Scan entire organizations to identify employees and their commit patterns
 ## Installation
 
 ```bash
-go install github.com/gnomegl/gitslurp@latest
+go install git.sr.ht/~gnome/gitslurp@latest
 ```
 
 ## Usage
@@ -105,7 +105,7 @@ Requirements:
 
 Build from source:
 ```bash
-git clone https://github.com/gnomegl/gitslurp.git
+git clone git@git.sr.ht:~gnome/gitslurp
 cd gitslurp
 go build
 ```
