@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gnomegl/gitslurp/internal/models"
-	"github.com/gnomegl/gitslurp/internal/scanner"
+	"git.sr.ht/~gnome/gitslurp/internal/models"
+	"git.sr.ht/~gnome/gitslurp/internal/scanner"
 
 	"github.com/google/go-github/v57/github"
 )

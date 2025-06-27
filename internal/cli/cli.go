@@ -2,7 +2,7 @@ package cli
 
 import (
 	"github.com/urfave/cli/v2"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"git.sr.ht/~gnome/gitslurp/internal/utils"
 )
 
 const helpTemplate = `{{.Name}} - {{.Usage}}
