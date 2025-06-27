@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/gnomegl/gitslurp/internal/github"
-	"github.com/gnomegl/gitslurp/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/urfave/cli/v2"
 )
@@ -26,20 +25,6 @@ func SetupGitHubClient(c *cli.Context, ctx context.Context) (*gh.Client, error) 
 }
 
 func checkLatestVersion(ctx context.Context, client *gh.Client) {
-	release, _, err := client.Repositories.GetLatestRelease(ctx, "gnomegl", "gitslurp")
-	if err != nil {
-		return
-	}
-
-	latestVersion := release.GetTagName()
-	if latestVersion[0] == 'v' {
-		latestVersion = latestVersion[1:]
-	}
-	
-	if latestVersion != utils.GetVersion() {
-		fmt.Printf("\x1b[33mA new version of gitslurp is available: %s (you're running %s)\x1b[0m\n", latestVersion, utils.GetVersion())
-		fmt.Println("\x1b[33mTo update: \x1b[0m")
-		fmt.Println("\x1b[36mgo install github.com/gnomegl/gitslurp@latest\x1b[0m")
-		fmt.Println()
-	}
+	// Version checking disabled for sr.ht - no equivalent API
+	// To check for updates manually: go install git.sr.ht/~gnome/gitslurp@latest
 }

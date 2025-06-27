@@ -150,7 +150,8 @@ func UserInfo(user *gh.User, isOrg bool) {
 
 	termWidth := getTerminalWidth()
 	useTwoColumns := termWidth >= 100 // Switch to single column if terminal too narrow
-	colWidth := (termWidth - 4) / 2   // Account for spacing between columns
+	maxDisplayWidth := min(termWidth, 120) // Limit display width to prevent excessive spacing
+	colWidth := (maxDisplayWidth - 4) / 2   // Account for spacing between columns
 
 	fmt.Println()
 	if isOrg {
@@ -160,7 +161,7 @@ func UserInfo(user *gh.User, isOrg bool) {
 		fmt.Print("👤 ")
 		color.HiCyan("USER PROFILE")
 	}
-	fmt.Println(strings.Repeat("═", min(termWidth-1, 80)))
+	fmt.Println(strings.Repeat("═", min(maxDisplayWidth-1, 80)))
 	fmt.Println()
 
 	// Basic info section
