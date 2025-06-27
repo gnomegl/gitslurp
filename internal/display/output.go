@@ -2,6 +2,7 @@ package display
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/models"
 	gh "github.com/google/go-github/v57/github"
+	"golang.org/x/term"
 )
 
 // Context holds all the data needed for formatting and displaying results
@@ -111,11 +113,44 @@ func (cp *ColorPrinter) PrintSimilarAccount(email string, names []string, commit
 	color.Magenta("  Total Commits: %d", commitCount)
 }
 
-// UserInfo shows basic user information
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// getTerminalWidth returns the terminal width, defaulting to 80 if unavailable
+func getTerminalWidth() int {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		return 80 // Default fallback width
+	}
+	return width
+}
+
+// formatField creates a formatted field string with proper padding
+func formatField(label, value string, width int) string {
+	if value == "" {
+		return ""
+	}
+	maxValueWidth := width - len(label) - 3 // Account for ": " and padding
+	if len(value) > maxValueWidth {
+		value = value[:maxValueWidth-3] + "..."
+	}
+	return fmt.Sprintf("%-*s %s", len(label)+1, label+":", value)
+}
+
+// UserInfo displays user profile information in a responsive 2-column layout
 func UserInfo(user *gh.User, isOrg bool) {
 	if user == nil {
 		return
 	}
+
+	termWidth := getTerminalWidth()
+	useTwoColumns := termWidth >= 100 // Switch to single column if terminal too narrow
+	colWidth := (termWidth - 4) / 2   // Account for spacing between columns
 
 	fmt.Println()
 	if isOrg {
@@ -125,86 +160,185 @@ func UserInfo(user *gh.User, isOrg bool) {
 		fmt.Print("👤 ")
 		color.HiCyan("USER PROFILE")
 	}
-	fmt.Println(strings.Repeat("═", 50))
+	fmt.Println(strings.Repeat("═", min(termWidth-1, 80)))
 	fmt.Println()
 
-	color.HiWhite("Username:")
-	color.HiGreen("%s", user.GetLogin())
-
-	if user.GetName() != "" {
-		color.HiWhite("%-12s", "Name:")
-		color.HiGreen("%s", user.GetName())
-		fmt.Println()
+	// Basic info section
+	color.HiWhite("Username: ")
+	color.HiGreen("%s\n", user.GetLogin())
+	
+	// Collect all profile fields for display
+	profileFields := []struct {
+		label string
+		value string
+		color func(format string, a ...interface{})
+		icon  string
+	}{
+		{"Name", user.GetName(), color.HiGreen, ""},
+		{"Email", user.GetEmail(), color.HiGreen, ""},
+		{"Organization", user.GetCompany(), color.HiYellow, "🏢"},
+		{"Location", user.GetLocation(), color.HiMagenta, "📍"},
+		{"Website", user.GetBlog(), color.HiBlue, "🔗"},
+		{"Twitter", user.GetTwitterUsername(), color.HiBlue, "🐦"},
 	}
 
-	if user.GetEmail() != "" {
-		color.HiWhite("%-12s", "Email:")
-		color.HiGreen("%s", user.GetEmail())
-		fmt.Println()
-	}
-
+	// Bio gets special treatment - always full width
 	if user.GetBio() != "" {
-		color.HiWhite("%-12s", "Bio:")
-		color.HiCyan("%s", user.GetBio())
+		color.HiWhite("Bio: ")
+		color.HiCyan("%s\n", user.GetBio())
 		fmt.Println()
 	}
 
-	if user.GetCompany() != "" {
-		color.HiWhite("%-12s", "Company:")
-		color.HiYellow("%s", user.GetCompany())
-		fmt.Println()
+	// Display profile fields in columns
+	var leftCol, rightCol []string
+	fieldCount := 0
+	
+	for _, field := range profileFields {
+		if field.value == "" {
+			continue
+		}
+		
+		var displayValue string
+		if field.icon != "" {
+			if field.label == "Twitter" {
+				displayValue = fmt.Sprintf("%s @%s", field.icon, field.value)
+			} else {
+				displayValue = fmt.Sprintf("%s %s", field.icon, field.value)
+			}
+		} else {
+			displayValue = field.value
+		}
+		
+		fieldStr := formatField(field.label, displayValue, colWidth)
+		
+		if useTwoColumns && fieldCount%2 == 0 {
+			leftCol = append(leftCol, fieldStr)
+		} else {
+			rightCol = append(rightCol, fieldStr)
+		}
+		fieldCount++
 	}
 
-	if user.GetLocation() != "" {
-		color.HiWhite("%-12s", "Location:")
-		color.HiMagenta("📍 %s", user.GetLocation())
-		fmt.Println()
+	// Print columns
+	if useTwoColumns {
+		maxRows := len(leftCol)
+		if len(rightCol) > maxRows {
+			maxRows = len(rightCol)
+		}
+		
+		for i := 0; i < maxRows; i++ {
+			left := ""
+			right := ""
+			
+			if i < len(leftCol) {
+				left = leftCol[i]
+			}
+			if i < len(rightCol) {
+				right = rightCol[i]
+			}
+			
+			if left != "" && right != "" {
+				fmt.Printf("%-*s    %s\n", colWidth, left, right)
+			} else if left != "" {
+				fmt.Printf("%s\n", left)
+			} else if right != "" {
+				fmt.Printf("%-*s    %s\n", colWidth, "", right)
+			}
+		}
+	} else {
+		// Single column display
+		allFields := append(leftCol, rightCol...)
+		for _, field := range allFields {
+			fmt.Printf("%s\n", field)
+		}
 	}
 
-	if user.GetBlog() != "" {
-		color.HiWhite("%-12s", "Website:")
-		color.HiBlue("🔗 %s", user.GetBlog())
-		fmt.Println()
-	}
-
-	if user.GetTwitterUsername() != "" {
-		color.HiWhite("%-12s", "Twitter:")
-		color.HiBlue("🐦 @%s", user.GetTwitterUsername())
-		fmt.Println()
-	}
-
-	color.HiWhite("📅 Account Info:")
 	fmt.Println()
+	color.HiWhite("📅 Account Statistics\n")
+
+	// Statistics section
+	statsFields := []struct {
+		label string
+		value interface{}
+		color func(format string, a ...interface{})
+	}{}
 
 	if isOrg {
 		if user.GetPublicRepos() > 0 {
-			color.HiWhite("%-12s", "Repositories:")
-			color.HiGreen("%d", user.GetPublicRepos())
-			fmt.Println()
+			statsFields = append(statsFields, struct {
+				label string
+				value interface{}
+				color func(format string, a ...interface{})
+			}{"Repositories", user.GetPublicRepos(), color.HiGreen})
 		}
 	} else {
-		color.HiWhite("%-12s", "Repositories:")
-		color.HiGreen("%-8d", user.GetPublicRepos())
-		color.HiWhite("Gists: ")
-		color.HiGreen("%d", user.GetPublicGists())
-		fmt.Println()
-		color.HiWhite("%-12s", "Followers:")
-		color.HiCyan("%-8d", user.GetFollowers())
-		color.HiWhite("Following: ")
-		color.HiCyan("%d", user.GetFollowing())
-		fmt.Println()
+		statsFields = []struct {
+			label string
+			value interface{}
+			color func(format string, a ...interface{})
+		}{
+			{"Repositories", user.GetPublicRepos(), color.HiGreen},
+			{"Gists", user.GetPublicGists(), color.HiGreen},
+			{"Followers", user.GetFollowers(), color.HiCyan},
+			{"Following", user.GetFollowing(), color.HiCyan},
+		}
 	}
 
+	// Display stats in columns
+	var leftStats, rightStats []string
+	for i, stat := range statsFields {
+		statStr := fmt.Sprintf("%s: %v", stat.label, stat.value)
+		
+		if useTwoColumns && i%2 == 0 {
+			leftStats = append(leftStats, statStr)
+		} else {
+			rightStats = append(rightStats, statStr)
+		}
+	}
+
+	// Print stats
+	if useTwoColumns {
+		maxRows := len(leftStats)
+		if len(rightStats) > maxRows {
+			maxRows = len(rightStats)
+		}
+		
+		for i := 0; i < maxRows; i++ {
+			left := ""
+			right := ""
+			
+			if i < len(leftStats) {
+				left = leftStats[i]
+			}
+			if i < len(rightStats) {
+				right = rightStats[i]
+			}
+			
+			if left != "" && right != "" {
+				fmt.Printf("%-*s    %s\n", colWidth, left, right)
+			} else if left != "" {
+				fmt.Printf("%s\n", left)
+			} else if right != "" {
+				fmt.Printf("%-*s    %s\n", colWidth, "", right)
+			}
+		}
+	} else {
+		allStats := append(leftStats, rightStats...)
+		for _, stat := range allStats {
+			fmt.Printf("%s\n", stat)
+		}
+	}
+
+	// Dates
+	fmt.Println()
 	if !user.GetCreatedAt().Time.IsZero() {
-		color.HiWhite("%-12s", "Created:")
-		color.HiGreen("%s", user.GetCreatedAt().Time.Format("January 2, 2006"))
-		fmt.Println()
+		color.HiWhite("Created: ")
+		color.HiGreen("%s\n", user.GetCreatedAt().Time.Format("January 2, 2006"))
 	}
 
 	if !user.GetUpdatedAt().Time.IsZero() {
-		color.HiWhite("%-12s", "Last Updated:")
-		color.HiYellow("%s", user.GetUpdatedAt().Time.Format("January 2, 2006"))
-		fmt.Println()
+		color.HiWhite("Last Updated: ")
+		color.HiYellow("%s\n", user.GetUpdatedAt().Time.Format("January 2, 2006"))
 	}
 
 	fmt.Println()
