@@ -9,6 +9,7 @@ import (
 	"git.sr.ht/~gnome/gitslurp/internal/models"
 	"git.sr.ht/~gnome/gitslurp/internal/scanner"
 
+	"github.com/fatih/color"
 	"github.com/google/go-github/v57/github"
 )
 
@@ -29,9 +30,12 @@ func FetchRepos(ctx context.Context, client *github.Client, username string, cfg
 
 func FetchReposWithUser(ctx context.Context, client *github.Client, username string, cfg *Config, user *github.User) ([]*github.Repository, error) {
 	if cfg == nil {
-		cfg = &Config{} // sneed why can't i do cfg = &DefaultConfig()
+		cfg = &Config{}
 		*cfg = DefaultConfig()
 	}
+
+	fmt.Println()
+	color.Blue("   📦  Enumerating user repositories...")
 
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByUserOptions{
@@ -39,19 +43,41 @@ func FetchReposWithUser(ctx context.Context, client *github.Client, username str
 		Type:        "all",
 	}
 
+	totalFetched := 0
+	filteredForks := 0
+
 	for {
 		repos, resp, err := client.Repositories.ListByUser(ctx, username, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching repositories: %v", err)
 		}
-		allRepos = append(allRepos, repos...)
-		
+
+		totalFetched += len(repos)
+
+		for _, repo := range repos {
+			if !cfg.IncludeForks && repo.GetFork() {
+				filteredForks++
+				continue
+			}
+			allRepos = append(allRepos, repo)
+		}
+
 		if resp.NextPage == 0 {
 			break
 		}
 		opt.Page = resp.NextPage
 	}
-	
+
+	if cfg.IncludeForks {
+		color.Green("   ✓  Found %d repositories (including forks)", len(allRepos))
+	} else {
+		if filteredForks > 0 {
+			color.Green("   ✓  Found %d owned repositories (%d forks excluded)", len(allRepos), filteredForks)
+		} else {
+			color.Green("   ✓  Found %d repositories", len(allRepos))
+		}
+	}
+
 	return allRepos, nil
 }
 

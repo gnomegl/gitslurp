@@ -53,9 +53,13 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Usage:   "Show users who forked the repository",
 			},
 			&cli.BoolFlag{
-				Name:    "output-format",
-				Aliases: []string{"o"},
-				Usage:   "Output format (json, csv, text)",
+				Name:    "json",
+				Aliases: []string{"j"},
+				Usage:   "Output results in JSON format",
+			},
+			&cli.BoolFlag{
+				Name:    "csv",
+				Usage:   "Output results in CSV format",
 			},
 			&cli.BoolFlag{
 				Name:    "profile-only",
@@ -71,6 +75,11 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Name:    "timestamp-analysis",
 				Aliases: []string{"T"},
 				Usage:   "🕐 Analyze commit timestamps for unusual patterns",
+			},
+			&cli.BoolFlag{
+				Name:    "include-forks",
+				Aliases: []string{"F"},
+				Usage:   "Include forked repositories in the scan (default: only owned repos + external contributions)",
 			},
 		},
 		Action:    action,

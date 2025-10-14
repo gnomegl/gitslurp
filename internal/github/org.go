@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fatih/color"
 	"github.com/google/go-github/v57/github"
 )
 
@@ -13,6 +14,9 @@ func FetchOrgRepos(ctx context.Context, client *github.Client, orgName string, c
 		cfg = &Config{}
 		*cfg = DefaultConfig()
 	}
+
+	fmt.Println()
+	color.Blue("   📦  Enumerating organization repositories...")
 
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByOrgOptions{
@@ -26,13 +30,15 @@ func FetchOrgRepos(ctx context.Context, client *github.Client, orgName string, c
 			return nil, fmt.Errorf("error fetching repositories: %v", err)
 		}
 		allRepos = append(allRepos, repos...)
-		
+
 		if resp.NextPage == 0 {
 			break
 		}
 		opt.Page = resp.NextPage
 	}
-	
+
+	color.Green("   ✓  Found %d organization repositories", len(allRepos))
+
 	return allRepos, nil
 }
 

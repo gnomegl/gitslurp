@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 
@@ -121,6 +122,7 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 		progressbar.OptionShowCount(),
 		progressbar.OptionSetWidth(20),
 		progressbar.OptionSetDescription(progressDescription),
+		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]█[reset]",
 			SaucerHead:    "[green]█[reset]",
@@ -155,7 +157,6 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 
 			var repoCommits []models.CommitInfo
 			for _, commit := range allCommits {
-				// If we're scanning for secrets or patterns, fetch the full commit with files
 				if checkSecrets || cfg.ShowInteresting {
 					fullCommit, _, err := client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
 					if err == nil {
@@ -177,6 +178,158 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 	wg.Wait()
 	bar.Finish()
 	return emails
+}
+
+type EmailUpdate struct {
+	Email   string
+	Details *models.EmailDetails
+	RepoName string
+}
+
+func ProcessReposStreaming(ctx context.Context, client *gh.Client, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool, updateChan chan<- EmailUpdate) map[string]*models.EmailDetails {
+	if cfg == nil {
+		cfg = &Config{}
+		*cfg = DefaultConfig()
+	}
+
+	emails := make(map[string]*models.EmailDetails)
+	var mutex sync.Mutex
+	sem := make(chan bool, cfg.MaxConcurrentRequests)
+	var wg sync.WaitGroup
+
+	var progressDescription string
+	if checkSecrets && cfg.ShowInteresting {
+		progressDescription = "[cyan]Sniffing repositories for secrets and patterns 🐽[reset]"
+	} else if checkSecrets {
+		progressDescription = "[cyan]Sniffing repositories for secrets 🐽[reset]"
+	} else if cfg.ShowInteresting {
+		progressDescription = "[cyan]Slurping repositories for interesting patterns ⭐[reset]"
+	} else {
+		progressDescription = "[cyan]Slurping repositories[reset]"
+	}
+
+	bar := progressbar.NewOptions(len(repos),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetWidth(20),
+		progressbar.OptionSetDescription(progressDescription),
+		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]█[reset]",
+			SaucerHead:    "[green]█[reset]",
+			SaucerPadding: "[white]░[reset]",
+			BarStart:      "[blue]▐[reset]",
+			BarEnd:        "[blue]▌[reset]",
+		}))
+
+	for _, repo := range repos {
+		wg.Add(1)
+		go func(repo *gh.Repository) {
+			defer wg.Done()
+			sem <- true
+			defer func() { <-sem }()
+
+			var allCommits []*gh.RepositoryCommit
+			opts := &gh.CommitsListOptions{
+				ListOptions: gh.ListOptions{PerPage: 100},
+			}
+
+			for {
+				commits, resp, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+				if err != nil {
+					break
+				}
+				allCommits = append(allCommits, commits...)
+				if resp.NextPage == 0 {
+					break
+				}
+				opts.Page = resp.NextPage
+			}
+
+			var repoCommits []models.CommitInfo
+			for _, commit := range allCommits {
+				if checkSecrets || cfg.ShowInteresting {
+					fullCommit, _, err := client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
+					if err == nil {
+						commit = fullCommit
+					}
+				}
+				commitInfo := ProcessCommit(commit, checkSecrets, cfg)
+				repoCommits = append(repoCommits, commitInfo)
+			}
+
+			mutex.Lock()
+			newEmails := aggregateCommitsStreaming(emails, repoCommits, repo.GetFullName(), targetUserIdentifiers, showTargetOnly)
+			for email, details := range newEmails {
+				if updateChan != nil {
+					updateChan <- EmailUpdate{
+						Email:   email,
+						Details: details,
+						RepoName: repo.GetFullName(),
+					}
+				}
+			}
+			mutex.Unlock()
+
+			bar.Add(1)
+		}(repo)
+	}
+
+	wg.Wait()
+	bar.Finish()
+	if updateChan != nil {
+		close(updateChan)
+	}
+	return emails
+}
+
+func aggregateCommitsStreaming(emails map[string]*models.EmailDetails, commits []models.CommitInfo, repoName string, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
+	newEmails := make(map[string]*models.EmailDetails)
+
+	for _, commit := range commits {
+		if commit.AuthorEmail == "" {
+			continue
+		}
+
+		if showTargetOnly && targetUserIdentifiers != nil {
+			isTargetUser := targetUserIdentifiers[commit.AuthorEmail] || targetUserIdentifiers[commit.AuthorName]
+			if !isTargetUser {
+				continue
+			}
+		}
+
+		email := commit.AuthorEmail
+		isNew := false
+		if _, exists := emails[email]; !exists {
+			emails[email] = &models.EmailDetails{
+				Names:   make(map[string]struct{}),
+				Commits: make(map[string][]models.CommitInfo),
+			}
+			isNew = true
+		}
+
+		details := emails[email]
+		details.Names[commit.AuthorName] = struct{}{}
+		details.Commits[repoName] = append(details.Commits[repoName], commit)
+		details.CommitCount++
+
+		if isNew {
+			detailsCopy := &models.EmailDetails{
+				Names:       make(map[string]struct{}),
+				Commits:     make(map[string][]models.CommitInfo),
+				CommitCount: details.CommitCount,
+			}
+			for name := range details.Names {
+				detailsCopy.Names[name] = struct{}{}
+			}
+			for repo, commits := range details.Commits {
+				detailsCopy.Commits[repo] = append([]models.CommitInfo{}, commits...)
+			}
+			newEmails[email] = detailsCopy
+		}
+	}
+
+	return newEmails
 }
 
 // scanContent scans text for secrets and interesting patterns
