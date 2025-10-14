@@ -2,8 +2,8 @@ package art
 
 import (
 	"fmt"
+	"os"
 
-	"github.com/fatih/color"
 	"git.sr.ht/~gnome/gitslurp/internal/utils"
 )
 
@@ -19,6 +19,6 @@ const LogoMain = `   _____   _   _____  _
 const LogoText = "v%s by @0xGnomeGL"
 
 func PrintLogo() {
-	color.Cyan(fmt.Sprintf(LogoMain, color.HiRedString(fmt.Sprintf(LogoText, utils.GetVersion()))))
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, "\033[36m%s\033[0m\n", fmt.Sprintf(LogoMain, fmt.Sprintf("\033[91m"+LogoText+"\033[0m", utils.GetVersion())))
+	fmt.Fprintln(os.Stderr)
 }

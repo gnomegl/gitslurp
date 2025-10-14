@@ -1,7 +1,10 @@
 package display
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -15,7 +18,6 @@ import (
 	"golang.org/x/term"
 )
 
-// Context holds all the data needed for formatting and displaying results
 type Context struct {
 	Emails          map[string]*models.EmailDetails
 	ShowDetails     bool
@@ -28,6 +30,13 @@ type Context struct {
 	Cfg             *github.Config
 	UserIdentifiers map[string]bool
 	TargetNames     map[string]bool
+	OrgDomain       string
+}
+
+type StreamUpdate struct {
+	Email   string
+	Details *models.EmailDetails
+	RepoName string
 }
 
 // EmailEntry represents a single email with its details for sorting
@@ -95,23 +104,41 @@ type ColorPrinter struct {
 	isTarget bool
 }
 
-// displays email information with appropriate coloring
-func (cp *ColorPrinter) PrintEmail(email string, names []string, commitCount int, isTarget bool) {
+func (cp *ColorPrinter) PrintEmail(email string, names []string, commitCount int, isTarget bool, isOrgEmployee bool) {
+	termInfo := getTerminalInfo()
+	maxLen := termInfo.maxDisplay - 25
+
+	nameStr := strings.Join(names, ", ")
+	if len(nameStr) > maxLen {
+		nameStr = truncateString(nameStr, maxLen)
+	}
+
 	if isTarget {
-		color.HiYellow("📍 %s (Target User)", email)
-		color.HiGreen("  Names used: %s", strings.Join(names, ", "))
+		color.HiYellow("📍 %s (Target User)", truncateString(email, maxLen))
+		color.HiGreen("  Names used: %s", nameStr)
+		color.HiGreen("  Total Commits: %d", commitCount)
+	} else if isOrgEmployee {
+		color.HiYellow("📌 %s (Organization Member)", truncateString(email, maxLen))
+		color.HiGreen("  Names used: %s", nameStr)
 		color.HiGreen("  Total Commits: %d", commitCount)
 	} else {
-		color.Yellow(email)
-		color.White("  Names: %s", strings.Join(names, ", "))
+		color.Yellow(truncateString(email, maxLen))
+		color.White("  Names: %s", nameStr)
 		color.White("  Total Commits: %d", commitCount)
 	}
 }
 
-// PrintSimilarAccount displays similar account information
 func (cp *ColorPrinter) PrintSimilarAccount(email string, names []string, commitCount int) {
-	fmt.Printf("👁️ %s (Similar Account)\n", email)
-	color.Magenta("  Names used: %s", strings.Join(names, ", "))
+	termInfo := getTerminalInfo()
+	maxLen := termInfo.maxDisplay - 25
+
+	nameStr := strings.Join(names, ", ")
+	if len(nameStr) > maxLen {
+		nameStr = truncateString(nameStr, maxLen)
+	}
+
+	fmt.Printf("👁️ %s (Similar Account)\n", truncateString(email, maxLen))
+	color.Magenta("  Names used: %s", nameStr)
 	color.Magenta("  Total Commits: %d", commitCount)
 }
 
@@ -123,37 +150,62 @@ func min(a, b int) int {
 	return b
 }
 
-// getTerminalWidth returns the terminal width, defaulting to 80 if unavailable
-func getTerminalWidth() int {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
-	if err != nil {
-		return 80 // Default fallback width
-	}
-	return width
+type terminalInfo struct {
+	width      int
+	maxDisplay int
+	graphWidth int
 }
 
-// formatField creates a formatted field string with proper padding
+func getTerminalInfo() *terminalInfo {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		width = 80
+	}
+
+	return &terminalInfo{
+		width:      width,
+		maxDisplay: min(width-4, 120),
+		graphWidth: min(width-20, 50),
+	}
+}
+
 func formatField(label, value string, width int) string {
 	if value == "" {
 		return ""
 	}
-	maxValueWidth := width - len(label) - 3 // Account for ": " and padding
-	if len(value) > maxValueWidth {
+	maxValueWidth := width - len(label) - 3
+	if len(value) > maxValueWidth && maxValueWidth > 10 {
 		value = value[:maxValueWidth-3] + "..."
 	}
 	return fmt.Sprintf("%-*s %s", len(label)+1, label+":", value)
 }
 
-// UserInfo displays user profile information in a responsive 2-column layout
+func truncateString(s string, maxLen int) string {
+	if maxLen < 10 {
+		maxLen = 10
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+func getSeparator(termInfo *terminalInfo, maxWidth int) string {
+	width := termInfo.maxDisplay
+	if maxWidth > 0 && maxWidth < width {
+		width = maxWidth
+	}
+	return strings.Repeat("─", width)
+}
+
 func UserInfo(user *gh.User, isOrg bool) {
 	if user == nil {
 		return
 	}
 
-	termWidth := getTerminalWidth()
-	useTwoColumns := termWidth >= 100 // Switch to single column if terminal too narrow
-	maxDisplayWidth := min(termWidth, 120) // Limit display width to prevent excessive spacing
-	colWidth := (maxDisplayWidth - 4) / 2   // Account for spacing between columns
+	termInfo := getTerminalInfo()
+	useTwoColumns := termInfo.width >= 100
+	colWidth := (termInfo.maxDisplay - 4) / 2
 
 	fmt.Println()
 	if isOrg {
@@ -163,7 +215,7 @@ func UserInfo(user *gh.User, isOrg bool) {
 		fmt.Print("👤 ")
 		color.HiCyan("USER PROFILE")
 	}
-	fmt.Println(strings.Repeat("═", min(maxDisplayWidth-1, 80)))
+	fmt.Println(strings.Repeat("═", termInfo.maxDisplay))
 	fmt.Println()
 
 	// Basic info section
@@ -347,12 +399,16 @@ func UserInfo(user *gh.User, isOrg bool) {
 	fmt.Println()
 }
 
-// Results shows all the collected information about emails and commits
 func Results(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool,
-	lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config) {
+	lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config, outputFormat string) {
 
 	matcher := NewUserMatcher(knownUsername, lookupEmail, user)
 	matcher.targetNames = extractTargetUserNames(emails, matcher.identifiers)
+
+	orgDomain := ""
+	if isOrg && user != nil {
+		orgDomain = extractDomainFromWebsite(user.GetBlog())
+	}
 
 	ctx := &Context{
 		Emails:          emails,
@@ -366,26 +422,74 @@ func Results(emails map[string]*models.EmailDetails, showDetails bool, checkSecr
 		Cfg:             cfg,
 		UserIdentifiers: matcher.identifiers,
 		TargetNames:     matcher.targetNames,
+		OrgDomain:       orgDomain,
 	}
 
-	result := processEmails(ctx, matcher)
-	displayResults(ctx, result)
+	switch outputFormat {
+	case "json":
+		outputJSON(ctx, matcher)
+	case "csv":
+		outputCSV(ctx, matcher)
+	default:
+		result := processEmails(ctx, matcher)
+		displayResults(ctx, result)
+	}
+}
+
+func StreamResults(streamChan <-chan StreamUpdate, showDetails bool, checkSecrets bool,
+	lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config) {
+
+	matcher := NewUserMatcher(knownUsername, lookupEmail, user)
+	termInfo := getTerminalInfo()
+
+	orgDomain := ""
+	if isOrg && user != nil {
+		orgDomain = extractDomainFromWebsite(user.GetBlog())
+	}
+
+	fmt.Println("\n\nCollected author information:")
+	fmt.Println(getSeparator(termInfo, 80))
+	fmt.Println()
+
+	seenEmails := make(map[string]bool)
+	printer := &ColorPrinter{}
+
+	for update := range streamChan {
+		if seenEmails[update.Email] {
+			continue
+		}
+		seenEmails[update.Email] = true
+
+		isTargetUser := matcher.IsTargetUser(update.Email, update.Details)
+		isOrgEmployee := isOrg && isOrganizationEmail(update.Email, orgDomain)
+		if showTargetOnly && !isTargetUser {
+			continue
+		}
+
+		names := extractNames(update.Details)
+		printer.PrintEmail(update.Email, names, update.Details.CommitCount, isTargetUser, isOrgEmployee)
+		fmt.Println()
+	}
 }
 
 // EmailProcessResult holds the results of email processing
 type EmailProcessResult struct {
-	totalCommits      int
-	totalContributors int
-	targetAccounts    map[string][]string
-	similarAccounts   map[string][]string
+	totalCommits         int
+	totalContributors    int
+	targetAccounts       map[string][]string
+	similarAccounts      map[string][]string
+	orgMembers           map[string][]string
+	similarOrgMembers    map[string][]string
 }
 
 // processEmails processes all emails and returns aggregated results
 func processEmails(ctx *Context, matcher *UserMatcher) *EmailProcessResult {
 	sortedEmails := sortEmailsByCommitCount(ctx.Emails)
 	result := &EmailProcessResult{
-		targetAccounts:  make(map[string][]string),
-		similarAccounts: make(map[string][]string),
+		targetAccounts:    make(map[string][]string),
+		similarAccounts:   make(map[string][]string),
+		orgMembers:        make(map[string][]string),
+		similarOrgMembers: make(map[string][]string),
 	}
 
 	printer := &ColorPrinter{}
@@ -398,6 +502,7 @@ func processEmails(ctx *Context, matcher *UserMatcher) *EmailProcessResult {
 
 	for _, entry := range sortedEmails {
 		isTargetUser := matcher.IsTargetUser(entry.Email, entry.Details)
+		isOrgEmployee := ctx.IsOrg && isOrganizationEmail(entry.Email, ctx.OrgDomain)
 		result.totalContributors++
 
 		if opts.ShowTargetOnly && !isTargetUser {
@@ -405,16 +510,23 @@ func processEmails(ctx *Context, matcher *UserMatcher) *EmailProcessResult {
 		}
 
 		names := extractNames(entry.Details)
+		hasSimilarNames := matcher.HasMatchingNames(names)
 
 		if isTargetUser {
 			result.totalCommits += entry.Details.CommitCount
 			result.targetAccounts[entry.Email] = names
-			printer.PrintEmail(entry.Email, names, entry.Details.CommitCount, true)
-		} else if matcher.HasMatchingNames(names) {
+			printer.PrintEmail(entry.Email, names, entry.Details.CommitCount, true, false)
+		} else if isOrgEmployee {
+			if hasSimilarNames {
+				result.similarOrgMembers[entry.Email] = names
+			} else {
+				result.orgMembers[entry.Email] = names
+			}
+		} else if hasSimilarNames {
 			result.similarAccounts[entry.Email] = names
 			printer.PrintSimilarAccount(entry.Email, names, entry.Details.CommitCount)
 		} else if !opts.ShowTargetOnly {
-			printer.PrintEmail(entry.Email, names, entry.Details.CommitCount, false)
+			printer.PrintEmail(entry.Email, names, entry.Details.CommitCount, false, false)
 		}
 
 		if shouldShowCommitDetails(opts) {
@@ -436,12 +548,12 @@ func displayResults(ctx *Context, result *EmailProcessResult) {
 	fmt.Println("\nCollected author information:")
 
 	displayTotals(ctx.ShowTargetOnly, result.totalCommits, result.totalContributors)
-	
+
 	if ctx.Cfg.TimestampAnalysis {
 		displayTimestampAnalysis(ctx.Emails, ctx.UserIdentifiers)
 	}
-	
-	displaySummary(result.targetAccounts, result.similarAccounts)
+
+	displaySummary(result.targetAccounts, result.similarAccounts, result.orgMembers, result.similarOrgMembers, ctx.IsOrg, ctx.OrgDomain)
 }
 
 // sortEmailsByCommitCount sorts emails by commit count in descending order
@@ -525,6 +637,75 @@ func extractNames(details *models.EmailDetails) []string {
 	return names
 }
 
+func extractDomainFromWebsite(website string) string {
+	if website == "" {
+		return ""
+	}
+
+	if !strings.HasPrefix(website, "http://") && !strings.HasPrefix(website, "https://") {
+		website = "https://" + website
+	}
+
+	parsedURL, err := url.Parse(website)
+	if err != nil {
+		return ""
+	}
+
+	domain := parsedURL.Hostname()
+	domain = strings.TrimPrefix(domain, "www.")
+
+	return domain
+}
+
+func extractBaseDomain(domain string) string {
+	domain = strings.ToLower(domain)
+
+	parts := strings.Split(domain, ".")
+	if len(parts) < 2 {
+		return domain
+	}
+
+	twoLevelTLDs := map[string]bool{
+		"co.uk": true, "co.jp": true, "co.nz": true, "co.za": true,
+		"com.au": true, "com.br": true, "com.cn": true, "com.mx": true,
+		"ac.uk": true, "gov.uk": true, "org.uk": true,
+	}
+
+	if len(parts) >= 3 {
+		lastTwo := parts[len(parts)-2] + "." + parts[len(parts)-1]
+		if twoLevelTLDs[lastTwo] {
+			if len(parts) >= 3 {
+				return parts[len(parts)-3]
+			}
+		}
+	}
+
+	return parts[len(parts)-2]
+}
+
+func isOrganizationEmail(email, orgDomain string) bool {
+	if orgDomain == "" || email == "" {
+		return false
+	}
+
+	if !strings.Contains(email, "@") {
+		return false
+	}
+
+	emailDomain := strings.Split(email, "@")[1]
+	emailDomain = strings.ToLower(emailDomain)
+	orgDomain = strings.ToLower(orgDomain)
+
+	if emailDomain == orgDomain {
+		return true
+	}
+
+	emailBase := extractBaseDomain(emailDomain)
+	orgBase := extractBaseDomain(orgDomain)
+
+	return emailBase == orgBase && emailBase != "" && orgBase != ""
+}
+
 func displayAccountInfo(user *gh.User, isOrg bool) {
 	if user != nil {
 		accountType := "User"
@@ -600,14 +781,17 @@ func (cd *CommitDisplayer) shouldShowCommit(commit models.CommitInfo) bool {
 		(len(commit.Secrets) > 0 && (cd.ctx.CheckSecrets || cd.ctx.Cfg.ShowInteresting))
 }
 
-// displayRepoHeader shows the repository header with appropriate coloring
 func (cd *CommitDisplayer) displayRepoHeader(repoName string, isTargetUser bool, email string) {
+	termInfo := getTerminalInfo()
+	maxLen := termInfo.maxDisplay - 15
+
+	truncatedRepo := truncateString(repoName, maxLen)
 	if isTargetUser {
-		color.HiGreen("  📂 Repo: %s", repoName)
+		color.HiGreen("  📂 Repo: %s", truncatedRepo)
 	} else if !cd.ctx.ShowTargetOnly && cd.ctx.UserIdentifiers[email] {
-		color.HiWhite("  📂 Repo: %s", repoName)
+		color.HiWhite("  📂 Repo: %s", truncatedRepo)
 	} else {
-		color.Green("  Repo: %s", repoName)
+		color.Green("  Repo: %s", truncatedRepo)
 	}
 }
 
@@ -640,10 +824,12 @@ func (cd *CommitDisplayer) displayCommitInfo(commit models.CommitInfo, isTargetC
 	}
 }
 
-// printCommitHighlight prints commit info with high emphasis
 func (cd *CommitDisplayer) printCommitHighlight(commit models.CommitInfo, commitIcon, authorIcon string) {
+	termInfo := getTerminalInfo()
+	urlMaxLen := termInfo.maxDisplay - 15
+
 	color.HiMagenta("%s %s", commitIcon, commit.Hash)
-	color.HiBlue("    🔗 URL: %s", commit.URL)
+	color.HiBlue("    🔗 URL: %s", truncateString(commit.URL, urlMaxLen))
 	if commit.AuthorName == "" {
 		color.HiWhite("%s anonymous", authorIcon)
 	} else {
@@ -651,10 +837,12 @@ func (cd *CommitDisplayer) printCommitHighlight(commit models.CommitInfo, commit
 	}
 }
 
-// printCommitMedium prints commit info with medium emphasis
 func (cd *CommitDisplayer) printCommitMedium(commit models.CommitInfo, commitIcon, authorIcon string) {
+	termInfo := getTerminalInfo()
+	urlMaxLen := termInfo.maxDisplay - 15
+
 	color.Magenta("%s %s", commitIcon, commit.Hash)
-	color.Blue("    🔗 URL: %s", commit.URL)
+	color.Blue("    🔗 URL: %s", truncateString(commit.URL, urlMaxLen))
 	if commit.AuthorName == "" {
 		color.White("%s anonymous", authorIcon)
 	} else {
@@ -662,10 +850,12 @@ func (cd *CommitDisplayer) printCommitMedium(commit models.CommitInfo, commitIco
 	}
 }
 
-// printCommitRegular prints commit info with regular emphasis
 func (cd *CommitDisplayer) printCommitRegular(commit models.CommitInfo, commitIcon, authorIcon string) {
+	termInfo := getTerminalInfo()
+	urlMaxLen := termInfo.maxDisplay - 15
+
 	color.Magenta("%s %s", commitIcon, commit.Hash)
-	color.Blue("    URL: %s", commit.URL)
+	color.Blue("    URL: %s", truncateString(commit.URL, urlMaxLen))
 	if commit.AuthorName == "" {
 		color.White("%s anonymous", authorIcon)
 	} else {
@@ -750,13 +940,14 @@ func displayTotals(showTargetOnly bool, totalCommits, totalContributors int) {
 	}
 }
 
-func displaySummary(targetAccounts, similarAccounts map[string][]string) {
-	if len(targetAccounts) == 0 && len(similarAccounts) == 0 {
+func displaySummary(targetAccounts, similarAccounts, orgMembers, similarOrgMembers map[string][]string, isOrg bool, orgDomain string) {
+	if len(targetAccounts) == 0 && len(similarAccounts) == 0 && len(orgMembers) == 0 && len(similarOrgMembers) == 0 {
 		return
 	}
 
+	termInfo := getTerminalInfo()
 	color.HiCyan("\nSUMMARY")
-	fmt.Println(strings.Repeat("─", 60))
+	fmt.Println(getSeparator(termInfo, 60))
 
 	if len(targetAccounts) > 0 {
 		fmt.Println("\n📍  Target User Accounts:")
@@ -777,13 +968,45 @@ func displaySummary(targetAccounts, similarAccounts map[string][]string) {
 			}
 		}
 	}
+
+	if isOrg && (len(orgMembers) > 0 || len(similarOrgMembers) > 0) {
+		if orgDomain != "" {
+			fmt.Printf("\n📌  Organization Members (@%s):\n", orgDomain)
+		} else {
+			fmt.Println("\n📌  Organization Members:")
+		}
+
+		if len(similarOrgMembers) > 0 {
+			fmt.Println("\n  👁️  Similar to Target (Possible Alternate Accounts):")
+			for email, names := range similarOrgMembers {
+				color.HiYellow("    • %s", email)
+				if len(names) > 0 {
+					color.HiMagenta("      Names: %s", strings.Join(names, ", "))
+				}
+			}
+		}
+
+		if len(orgMembers) > 0 {
+			if len(similarOrgMembers) > 0 {
+				fmt.Println("\n  Other Members:")
+			}
+			for email, names := range orgMembers {
+				color.Yellow("    • %s", email)
+				if len(names) > 0 {
+					color.Green("      Names: %s", strings.Join(names, ", "))
+				}
+			}
+		}
+	}
+
 	fmt.Println()
 }
 
 // displayTimestampAnalysis shows timestamp analysis results
 func displayTimestampAnalysis(emails map[string]*models.EmailDetails, userIdentifiers map[string]bool) {
+	termInfo := getTerminalInfo()
 	color.HiCyan("\n🕐 TIMESTAMP ANALYSIS")
-	fmt.Println(strings.Repeat("─", 60))
+	fmt.Println(getSeparator(termInfo, 60))
 	
 	targetCommits := make(map[string][]models.CommitInfo)
 	
@@ -929,78 +1152,76 @@ func displayAggregatedHourlyGraph(patterns map[string]interface{}) {
 	if !ok || len(hourDist) == 0 {
 		return
 	}
-	
-	// Find max commits for scaling
+
+	termInfo := getTerminalInfo()
 	maxCommits := 0
 	for _, count := range hourDist {
 		if count > maxCommits {
 			maxCommits = count
 		}
 	}
-	
+
 	if maxCommits == 0 {
 		return
 	}
-	
+
 	color.HiWhite("📊 Aggregated Hourly Activity Timeline (All Target Users):")
+
+	barWidth := min(termInfo.graphWidth, 50)
+	scale := float64(barWidth) / float64(maxCommits)
 	
-	// Scale factor for ASCII graph (max 25 chars wide)
-	scale := 25.0 / float64(maxCommits)
-	
-	// Display graph with consistent spacing for all hours
 	for hour := 0; hour < 24; hour++ {
 		count := hourDist[hour]
 		barLength := int(float64(count) * scale)
-		
-		// Create bar
+
 		bar := strings.Repeat("█", barLength)
-		
-		// Always display each hour with consistent spacing
+
 		fmt.Printf("%02d:00 │", hour)
-		
+
 		if count > 0 {
-			// Display bar with count to the right
 			var coloredBar string
+			formatStr := fmt.Sprintf("%%-%ds", barWidth)
 			if hour >= 22 || hour <= 2 {
-				coloredBar = color.HiRedString("%-25s", bar)
+				coloredBar = color.HiRedString(formatStr, bar)
 			} else if hour >= 5 && hour <= 7 {
-				coloredBar = color.HiGreenString("%-25s", bar)
+				coloredBar = color.HiGreenString(formatStr, bar)
 			} else if hour >= 9 && hour <= 17 {
-				coloredBar = color.HiBlueString("%-25s", bar)
+				coloredBar = color.HiBlueString(formatStr, bar)
 			} else {
-				coloredBar = color.HiYellowString("%-25s", bar)
+				coloredBar = color.HiYellowString(formatStr, bar)
 			}
 			fmt.Printf("%s %d\n", coloredBar, count)
 		} else {
-			fmt.Printf("%-25s\n", "")
+			fmt.Printf("%s\n", strings.Repeat(" ", barWidth))
 		}
 	}
-	
-	color.White("     └─────────────────────────────┘")
+
+	separatorLen := barWidth + 5
+	color.White("     └%s┘", strings.Repeat("─", separatorLen))
 	color.White("     🔴 Night Owl  🟢 Early Bird  🔵 Work Hours  🟡 Other")
 }
 
 func displaySuspiciousPatterns(commits []models.CommitInfo) {
 	suspiciousCommits := make([]models.CommitInfo, 0)
-	
+
 	for _, commit := range commits {
 		if commit.TimestampAnalysis != nil && commit.TimestampAnalysis.IsUnusualHour {
 			suspiciousCommits = append(suspiciousCommits, commit)
 		}
 	}
-	
+
 	if len(suspiciousCommits) > 0 && len(suspiciousCommits) <= 15 {
 		fmt.Println("\n🔍 Unusual Hour Commits (Target Users):")
-		
+
 		sort.Slice(suspiciousCommits, func(i, j int) bool {
 			return suspiciousCommits[i].AuthorDate.After(suspiciousCommits[j].AuthorDate)
 		})
-		
+
 		for i, commit := range suspiciousCommits {
 			if i >= 8 {
 				break
 			}
-			
+
 			localTimeStr := commit.AuthorDate.Format("2006-01-02 15:04:05")
 			color.Yellow("  • %s at %s (%s)", commit.Hash[:8], localTimeStr, commit.TimestampAnalysis.CommitTimezone)
 			if commit.TimestampAnalysis.TimeZoneHint != "" {
@@ -1009,5 +1230,205 @@ func displaySuspiciousPatterns(commits []models.CommitInfo) {
 		}
 	} else if len(suspiciousCommits) > 15 {
 		fmt.Printf("\n🔍 Found %d unusual hour commits (showing pattern summary above)\n", len(suspiciousCommits))
+	}
+}
+
+type JSONOutput struct {
+	Target          string                 `json:"target"`
+	IsOrg           bool                   `json:"is_org"`
+	User            *JSONUser              `json:"user,omitempty"`
+	Emails          []JSONEmailEntry       `json:"emails"`
+	TotalCommits    int                    `json:"total_commits"`
+	TotalContributors int                  `json:"total_contributors"`
+}
+
+type JSONUser struct {
+	Login     string `json:"login"`
+	Name      string `json:"name,omitempty"`
+	Email     string `json:"email,omitempty"`
+	Company   string `json:"company,omitempty"`
+	Location  string `json:"location,omitempty"`
+	Bio       string `json:"bio,omitempty"`
+	Blog      string `json:"blog,omitempty"`
+	Twitter   string `json:"twitter,omitempty"`
+	Followers int    `json:"followers"`
+	Following int    `json:"following"`
+	PublicRepos int  `json:"public_repos"`
+}
+
+type JSONEmailEntry struct {
+	Email       string          `json:"email"`
+	Names       []string        `json:"names"`
+	CommitCount int             `json:"commit_count"`
+	IsTarget    bool            `json:"is_target"`
+	Repositories []JSONRepo     `json:"repositories"`
+}
+
+type JSONRepo struct {
+	Name    string             `json:"name"`
+	Commits []JSONCommit       `json:"commits"`
+}
+
+type JSONCommit struct {
+	Hash          string    `json:"hash"`
+	URL           string    `json:"url"`
+	Message       string    `json:"message,omitempty"`
+	AuthorName    string    `json:"author_name"`
+	AuthorEmail   string    `json:"author_email"`
+	AuthorDate    time.Time `json:"author_date"`
+	CommitterName string    `json:"committer_name,omitempty"`
+	CommitterEmail string   `json:"committer_email,omitempty"`
+	Secrets       []string  `json:"secrets,omitempty"`
+}
+
+func outputJSON(ctx *Context, matcher *UserMatcher) {
+	sortedEmails := sortEmailsByCommitCount(ctx.Emails)
+
+	output := JSONOutput{
+		Target:            ctx.KnownUsername,
+		IsOrg:             ctx.IsOrg,
+		Emails:            make([]JSONEmailEntry, 0),
+		TotalCommits:      0,
+		TotalContributors: len(sortedEmails),
+	}
+
+	if ctx.User != nil {
+		output.User = &JSONUser{
+			Login:       ctx.User.GetLogin(),
+			Name:        ctx.User.GetName(),
+			Email:       ctx.User.GetEmail(),
+			Company:     ctx.User.GetCompany(),
+			Location:    ctx.User.GetLocation(),
+			Bio:         ctx.User.GetBio(),
+			Blog:        ctx.User.GetBlog(),
+			Twitter:     ctx.User.GetTwitterUsername(),
+			Followers:   ctx.User.GetFollowers(),
+			Following:   ctx.User.GetFollowing(),
+			PublicRepos: ctx.User.GetPublicRepos(),
+		}
+	}
+
+	for _, entry := range sortedEmails {
+		isTarget := matcher.IsTargetUser(entry.Email, entry.Details)
+
+		if ctx.ShowTargetOnly && !isTarget {
+			continue
+		}
+
+		if isTarget {
+			output.TotalCommits += entry.Details.CommitCount
+		}
+
+		jsonEntry := JSONEmailEntry{
+			Email:       entry.Email,
+			Names:       extractNames(entry.Details),
+			CommitCount: entry.Details.CommitCount,
+			IsTarget:    isTarget,
+			Repositories: make([]JSONRepo, 0),
+		}
+
+		for repoName, commits := range entry.Details.Commits {
+			jsonRepo := JSONRepo{
+				Name:    repoName,
+				Commits: make([]JSONCommit, 0),
+			}
+
+			for _, commit := range commits {
+				jsonCommit := JSONCommit{
+					Hash:           commit.Hash,
+					URL:            commit.URL,
+					Message:        commit.Message,
+					AuthorName:     commit.AuthorName,
+					AuthorEmail:    commit.AuthorEmail,
+					AuthorDate:     commit.AuthorDate,
+					CommitterName:  commit.CommitterName,
+					CommitterEmail: commit.CommitterEmail,
+					Secrets:        commit.Secrets,
+				}
+				jsonRepo.Commits = append(jsonRepo.Commits, jsonCommit)
+			}
+
+			jsonEntry.Repositories = append(jsonEntry.Repositories, jsonRepo)
+		}
+
+		output.Emails = append(output.Emails, jsonEntry)
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(output); err != nil {
+		fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+	}
+}
+
+func outputCSV(ctx *Context, matcher *UserMatcher) {
+	sortedEmails := sortEmailsByCommitCount(ctx.Emails)
+
+	writer := csv.NewWriter(os.Stdout)
+	defer writer.Flush()
+
+	headers := []string{
+		"email",
+		"names",
+		"is_target",
+		"commit_count",
+		"repository",
+		"commit_hash",
+		"commit_url",
+		"author_name",
+		"author_email",
+		"author_date",
+		"committer_name",
+		"committer_email",
+		"secrets_found",
+	}
+
+	if err := writer.Write(headers); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing CSV headers: %v\n", err)
+		return
+	}
+
+	for _, entry := range sortedEmails {
+		isTarget := matcher.IsTargetUser(entry.Email, entry.Details)
+
+		if ctx.ShowTargetOnly && !isTarget {
+			continue
+		}
+
+		names := strings.Join(extractNames(entry.Details), "; ")
+		isTargetStr := "false"
+		if isTarget {
+			isTargetStr = "true"
+		}
+
+		for repoName, commits := range entry.Details.Commits {
+			for _, commit := range commits {
+				secretsStr := ""
+				if len(commit.Secrets) > 0 {
+					secretsStr = strings.Join(commit.Secrets, " | ")
+				}
+
+				row := []string{
+					entry.Email,
+					names,
+					isTargetStr,
+					fmt.Sprintf("%d", entry.Details.CommitCount),
+					repoName,
+					commit.Hash,
+					commit.URL,
+					commit.AuthorName,
+					commit.AuthorEmail,
+					commit.AuthorDate.Format(time.RFC3339),
+					commit.CommitterName,
+					commit.CommitterEmail,
+					secretsStr,
+				}
+
+				if err := writer.Write(row); err != nil {
+					fmt.Fprintf(os.Stderr, "Error writing CSV row: %v\n", err)
+					return
+				}
+			}
+		}
 	}
 }
