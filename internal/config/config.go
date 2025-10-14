@@ -7,16 +7,18 @@ import (
 )
 
 type AppConfig struct {
-	ShowDetails     bool
-	CheckSecrets    bool
-	ShowTargetOnly  bool
-	ShowInteresting bool
-	ProfileOnly     bool
-	ShowStargazers  bool
-	ShowForkers     bool
-	QuickMode       bool
+	ShowDetails       bool
+	CheckSecrets      bool
+	ShowTargetOnly    bool
+	ShowInteresting   bool
+	ProfileOnly       bool
+	ShowStargazers    bool
+	ShowForkers       bool
+	QuickMode         bool
 	TimestampAnalysis bool
-	Target          string
+	IncludeForks      bool
+	OutputFormat      string
+	Target            string
 }
 
 // extracts the username/email from command line args, ignoring flags
@@ -66,17 +68,26 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		return nil, err
 	}
 
+	outputFormat := "text"
+	if c.Bool("json") {
+		outputFormat = "json"
+	} else if c.Bool("csv") {
+		outputFormat = "csv"
+	}
+
 	return &AppConfig{
-		ShowDetails:     c.Bool("details"),
-		CheckSecrets:    c.Bool("secrets"),
-		ShowTargetOnly:  false,
-		ShowInteresting: c.Bool("interesting"),
-		ProfileOnly:     c.Bool("profile-only"),
-		ShowStargazers:  c.Bool("show-stargazers"),
-		ShowForkers:     c.Bool("show-forkers"),
-		QuickMode:       c.Bool("quick"),
+		ShowDetails:       c.Bool("details"),
+		CheckSecrets:      c.Bool("secrets"),
+		ShowTargetOnly:    false,
+		ShowInteresting:   c.Bool("interesting"),
+		ProfileOnly:       c.Bool("profile-only"),
+		ShowStargazers:    c.Bool("show-stargazers"),
+		ShowForkers:       c.Bool("show-forkers"),
+		QuickMode:         c.Bool("quick"),
 		TimestampAnalysis: c.Bool("timestamp-analysis"),
-		Target:          target,
+		IncludeForks:      c.Bool("include-forks"),
+		OutputFormat:      outputFormat,
+		Target:            target,
 	}, nil
 }
 

@@ -29,6 +29,12 @@ func NewOrchestrator(client *gh.Client, cfg *config.AppConfig, token string) *Or
 }
 
 func (o *Orchestrator) Run(ctx context.Context) error {
+	var oldStdout *os.File
+	if o.config.OutputFormat == "json" || o.config.OutputFormat == "csv" {
+		oldStdout = os.Stdout
+		os.Stdout = os.Stderr
+	}
+
 	username, lookupEmail, err := o.resolveTarget(ctx)
 	if err != nil {
 		return err
@@ -54,6 +60,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	cfg.ShowInteresting = o.config.ShowInteresting
 	cfg.QuickMode = o.config.QuickMode
 	cfg.TimestampAnalysis = o.config.TimestampAnalysis
+	cfg.IncludeForks = o.config.IncludeForks
 
 	repos, gists, err := o.fetchReposAndGists(ctx, username, isOrg, &cfg, user)
 	if err != nil {
@@ -79,19 +86,37 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		return o.handleNoEmails(isOrg, username, len(repos))
 	}
 
-	display.Results(emails, o.config.ShowDetails, o.config.CheckSecrets, lookupEmail, username, user, o.config.ShowTargetOnly, isOrg, &cfg)
+	if oldStdout != nil {
+		os.Stdout = oldStdout
+	}
+
+	display.Results(emails, o.config.ShowDetails, o.config.CheckSecrets, lookupEmail, username, user, o.config.ShowTargetOnly, isOrg, &cfg, o.config.OutputFormat)
+
+	if oldStdout != nil {
+		os.Stdout = os.Stderr
+	}
 
 	github.DisplayRateLimit(ctx, o.client)
+
+	if oldStdout != nil {
+		os.Stdout = oldStdout
+	}
 
 	return nil
 }
 
 func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail string, err error) {
 	username = o.config.Target
-	
+
 	if github.IsValidEmail(o.config.Target) {
 		lookupEmail = o.config.Target
-		color.Blue("\nLooking up GitHub user for email: %s", o.config.Target)
+		fmt.Println()
+		color.HiCyan("════════════════════════════════════════════════════════════════════")
+		color.HiWhite("🔍  Email-Based Investigation")
+		color.HiCyan("════════════════════════════════════════════════════════════════════")
+		fmt.Println()
+		color.Blue("   📧  Target Email: %s", o.config.Target)
+		color.Yellow("   🔎  Searching GitHub API for associated account...")
 		
 		// Check for delete_repo permissions when targeting an email
 		hasDeleteRepo, permErr := github.CheckDeleteRepoPermissions(ctx, o.client)
@@ -111,34 +136,38 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 
 		user, err := github.GetUserByEmail(ctx, o.client, o.config.Target)
 		if err != nil {
-			color.Red("[x] API search error: %v", err)
-			color.Yellow("[~] Attempting email spoofing method...")
-			
+			color.Red("   ✗  API search error: %v", err)
+			fmt.Println()
+			color.Yellow("   🎭  Attempting email spoofing method...")
+
 			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target, o.token)
 			if spoofErr != nil {
-				color.Red("[x] Email spoofing failed: %v", spoofErr)
+				color.Red("   ✗  Email spoofing failed: %v", spoofErr)
 				return "", "", fmt.Errorf("failed to resolve email %s: %v", o.config.Target, spoofErr)
 			}
-			
+
 			username = spoofedUsername
-			color.Green("[✓] Found GitHub user via spoofing: %s", username)
+			color.Green("   ✓  Found GitHub account via spoofing: %s", username)
 		} else if user == nil {
-			color.Yellow("[~] No user found via API search, attempting email spoofing...")
-			
+			fmt.Println()
+			color.Yellow("   ⚠️   No user found via API search")
+			color.Yellow("   🎭  Attempting email spoofing method...")
+
 			spoofedUsername, spoofErr := github.GetUsernameFromEmailSpoof(ctx, o.client, o.config.Target, o.token)
 			if spoofErr != nil {
-				color.Red("[x] Email spoofing failed: %v", spoofErr)
+				color.Red("   ✗  Email spoofing failed: %v", spoofErr)
 				return "", "", fmt.Errorf("no GitHub user found for email: %s", o.config.Target)
 			}
-			
+
 			username = spoofedUsername
-			color.Green("[✓] Found GitHub user via spoofing: %s", username)
+			color.Green("   ✓  Found GitHub account via spoofing: %s", username)
 		} else {
 			username = user.GetLogin()
-			color.Green("[✓] Found GitHub user via API: %s", username)
+			color.Green("   ✓  Found GitHub account via API: %s", username)
 		}
 	} else {
-		color.Blue("\nTarget user: %s", username)
+		fmt.Println()
+		color.Blue("Target Username: %s", username)
 	}
 	
 	return username, lookupEmail, nil
@@ -149,24 +178,33 @@ func (o *Orchestrator) fetchUserInfo(ctx context.Context, username, lookupEmail 
 		return nil, false, nil
 	}
 
+	fmt.Println()
+	color.Yellow("🔍  Checking account type...")
+
 	isOrg, err := github.IsOrganization(ctx, o.client, username)
 	if err != nil {
-		color.Red("[x] Error checking organization status: %v", err)
+		color.Red("✗  Error checking organization status: %v", err)
 		return nil, false, err
 	}
 
 	if isOrg {
-		color.Green("[✓] Organization detected: %s", username)
+		color.Green("✓ Organization account detected")
+		color.Blue("  Fetching organization profile...")
+	} else {
+		color.Green("✓ User account detected")
+		color.Blue("  Fetching user profile...")
 	}
 
 	user, _, err := o.client.Users.Get(ctx, username)
 	if err != nil {
-		color.Red("[x] Error fetching details: %v", err)
+		color.Red("✗  Error fetching profile details: %v", err)
 		return nil, false, err
 	}
 
-	if !isOrg {
-		color.Green("[✓] User detected: %s", user.GetLogin())
+	if isOrg {
+		color.Green("✓  Organization profile loaded: %s", user.GetLogin())
+	} else {
+		color.Green("✓  User profile loaded: %s", user.GetLogin())
 	}
 
 	return user, isOrg, nil

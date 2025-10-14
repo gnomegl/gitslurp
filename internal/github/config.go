@@ -11,6 +11,7 @@ type Config struct {
 	SkipNodeModules       bool
 	QuickMode             bool
 	TimestampAnalysis     bool
+	IncludeForks          bool
 }
 
 // DefaultConfig returns a default configuration
@@ -25,5 +26,6 @@ func DefaultConfig() Config {
 		SkipNodeModules:       true,
 		QuickMode:             false,
 		TimestampAnalysis:     false,
+		IncludeForks:          false,
 	}
 }
