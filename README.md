@@ -34,6 +34,7 @@ gitslurp soxoj
 ## Features
 - 🔍 **User-Centric Analysis**: Search by GitHub username, email address or organization
 - 📊 **Comprehensive Commit History**: View all commits made by a user across public repositories
+
 - 🎯 **Visual Highlighting**: Easily identify target user's commits with color-coding and emojis
 - 👥 **Multiple Identity Support**: Detects and groups commits from different email addresses and names
 - 🐽 **Advanced Secret Detection**: Powered by TruffleHog-inspired regex patterns for enterprise-grade secret detection
@@ -63,13 +64,26 @@ With GitHub token (recommended for better rate limits):
 gitslurp -t <github_token> <username>
 ```
 
+Enable secret detection:
+```bash
+gitslurp --secrets <username>
+```
+
+
+
 ### Options
 
 - `--token, -t`: GitHub personal access token (can also be set via `GITSLURP_GITHUB_TOKEN` environment variable)
 - `--details, -d`: Show detailed commit information
 - `--secrets, -s`: Enable TruffleHog-powered secret detection in commits 🐽
 - `--interesting, -i`: Show interesting findings like URLs, emails, and other patterns in commit messages
-- `--all, -a`: Show commits from all contributors in the target's repositories. This is useful for OSINT investigations to discover potential alternate accounts when users accidentally commit with different identities. Note: This flag is automatically enabled when scanning organizations.
+
+- `--quick, -q`: Quick mode - fetch ~50 most recent commits per repo ⚡
+- `--timestamp-analysis, -T`: Analyze commit timestamps for unusual patterns 🕐
+- `--include-forks, -F`: Include forked repositories in the scan
+- `--json, -j`: Output results in JSON format
+- `--csv`: Output results in CSV format
+- `--profile-only, -p`: Show user profile only, skip repository analysis
 
 ## Output Format
 
