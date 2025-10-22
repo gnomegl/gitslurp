@@ -5,11 +5,11 @@ import (
 	"log"
 	"os"
 
-	"git.sr.ht/~gnome/gitslurp/internal/auth"
-	cliPkg "git.sr.ht/~gnome/gitslurp/internal/cli"
-	"git.sr.ht/~gnome/gitslurp/internal/config"
-	"git.sr.ht/~gnome/gitslurp/internal/github"
-	"git.sr.ht/~gnome/gitslurp/internal/service"
+	"github.com/gnomegl/gitslurp/internal/auth"
+	cliPkg "github.com/gnomegl/gitslurp/internal/cli"
+	"github.com/gnomegl/gitslurp/internal/config"
+	"github.com/gnomegl/gitslurp/internal/github"
+	"github.com/gnomegl/gitslurp/internal/service"
 	"github.com/urfave/cli/v2"
 )
 

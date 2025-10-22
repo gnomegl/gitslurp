@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"git.sr.ht/~gnome/gitslurp/internal/models"
-	"git.sr.ht/~gnome/gitslurp/internal/scanner"
+	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/internal/scanner"
 
 	"github.com/fatih/color"
 	"github.com/google/go-github/v57/github"
@@ -35,7 +35,7 @@ func FetchReposWithUser(ctx context.Context, client *github.Client, username str
 	}
 
 	fmt.Println()
-	color.Blue("   📦  Enumerating user repositories...")
+	color.Blue("📦  Enumerating user repositories...")
 
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByUserOptions{
@@ -69,14 +69,16 @@ func FetchReposWithUser(ctx context.Context, client *github.Client, username str
 	}
 
 	if cfg.IncludeForks {
-		color.Green("   ✓  Found %d repositories (including forks)", len(allRepos))
+		color.Green("✓  Found %d repositories (including forks)", len(allRepos))
 	} else {
 		if filteredForks > 0 {
-			color.Green("   ✓  Found %d owned repositories (%d forks excluded)", len(allRepos), filteredForks)
+			color.Green("✓  Found %d owned repositories (%d forks excluded)", len(allRepos), filteredForks)
 		} else {
-			color.Green("   ✓  Found %d repositories", len(allRepos))
+			color.Green("✓  Found %d repositories", len(allRepos))
 		}
 	}
+
+	fmt.Println();
 
 	return allRepos, nil
 }

@@ -1,4 +1,4 @@
-module git.sr.ht/~gnome/gitslurp
+module github.com/gnomegl/gitslurp
 
 go 1.22
 
@@ -12,6 +12,7 @@ require (
 )
 
 require (
+	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect

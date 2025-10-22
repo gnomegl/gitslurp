@@ -1,8 +1,9 @@
 package cli
 
 import (
+	"github.com/gnomegl/gitslurp/internal/art"
+	"github.com/gnomegl/gitslurp/internal/utils"
 	"github.com/urfave/cli/v2"
-	"git.sr.ht/~gnome/gitslurp/internal/utils"
 )
 
 const helpTemplate = `{{.Name}} - {{.Usage}}
@@ -11,10 +12,12 @@ Usage: {{.HelpName}} [options] <username|email>
 
 Options:
    {{range .VisibleFlags}}{{.}}
-   {{end}}`
+   {{end}}
+`
 
 func NewApp(action cli.ActionFunc) *cli.App {
 	cli.AppHelpTemplate = helpTemplate
+	art.PrintLogo()
 
 	return &cli.App{
 		Name:    "gitslurp",
@@ -58,8 +61,8 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Usage:   "Output results in JSON format",
 			},
 			&cli.BoolFlag{
-				Name:    "csv",
-				Usage:   "Output results in CSV format",
+				Name:  "csv",
+				Usage: "Output results in CSV format",
 			},
 			&cli.BoolFlag{
 				Name:    "profile-only",
@@ -79,7 +82,7 @@ func NewApp(action cli.ActionFunc) *cli.App {
 			&cli.BoolFlag{
 				Name:    "include-forks",
 				Aliases: []string{"F"},
-				Usage:   "Include forked repositories in the scan (default: only owned repos + external contributions)",
+				Usage:   "Include forked repositories in the scan (default: only owned repos)",
 			},
 		},
 		Action:    action,

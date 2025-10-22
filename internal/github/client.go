@@ -226,7 +226,7 @@ func DisplayRateLimit(ctx context.Context, client *github.Client) {
 	resetLocal := rateLimitInfo.ResetTime.In(now.Location())
 	timeUntilReset := resetLocal.Sub(now)
 
-	fmt.Println(strings.Repeat("─", 50))
+	fmt.Println(strings.Repeat("-", 50))
 
 	percentage := float64(rateLimitInfo.Remaining) / float64(rateLimitInfo.Limit) * 100
 	if percentage > 50 {
