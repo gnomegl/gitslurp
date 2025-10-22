@@ -17,17 +17,18 @@ type AppConfig struct {
 	QuickMode         bool
 	TimestampAnalysis bool
 	IncludeForks      bool
-	OutputFormat      string
-	Target            string
+
+	OutputFormat string
+	Target       string
 }
 
 // extracts the username/email from command line args, ignoring flags
 func findTarget() (string, error) {
-	args := os.Args[1:] 
+	args := os.Args[1:]
 	var targets []string
 
 	// known flags that take values
-  // TODO: enumerate the flags for this
+	// TODO: enumerate the flags for this
 	flagsWithValues := map[string]bool{
 		"-t": true, "--token": true,
 	}
@@ -86,8 +87,8 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		QuickMode:         c.Bool("quick"),
 		TimestampAnalysis: c.Bool("timestamp-analysis"),
 		IncludeForks:      c.Bool("include-forks"),
-		OutputFormat:      outputFormat,
-		Target:            target,
+
+		OutputFormat: outputFormat,
+		Target:       target,
 	}, nil
 }
-
