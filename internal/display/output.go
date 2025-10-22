@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"git.sr.ht/~gnome/gitslurp/internal/github"
-	"git.sr.ht/~gnome/gitslurp/internal/models"
-	"git.sr.ht/~gnome/gitslurp/internal/utils"
+	"github.com/gnomegl/gitslurp/internal/github"
+	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"golang.org/x/term"
 )
@@ -34,8 +34,8 @@ type Context struct {
 }
 
 type StreamUpdate struct {
-	Email   string
-	Details *models.EmailDetails
+	Email    string
+	Details  *models.EmailDetails
 	RepoName string
 }
 
@@ -112,35 +112,8 @@ func (cp *ColorPrinter) PrintEmail(email string, names []string, commitCount int
 	if len(nameStr) > maxLen {
 		nameStr = truncateString(nameStr, maxLen)
 	}
-
-	if isTarget {
-		color.HiYellow("📍 %s (Target User)", truncateString(email, maxLen))
-		color.HiGreen("  Names used: %s", nameStr)
-		color.HiGreen("  Total Commits: %d", commitCount)
-	} else if isOrgEmployee {
-		color.HiYellow("📌 %s (Organization Member)", truncateString(email, maxLen))
-		color.HiGreen("  Names used: %s", nameStr)
-		color.HiGreen("  Total Commits: %d", commitCount)
-	} else {
-		color.Yellow(truncateString(email, maxLen))
-		color.White("  Names: %s", nameStr)
-		color.White("  Total Commits: %d", commitCount)
-	}
 }
 
-func (cp *ColorPrinter) PrintSimilarAccount(email string, names []string, commitCount int) {
-	termInfo := getTerminalInfo()
-	maxLen := termInfo.maxDisplay - 25
-
-	nameStr := strings.Join(names, ", ")
-	if len(nameStr) > maxLen {
-		nameStr = truncateString(nameStr, maxLen)
-	}
-
-	fmt.Printf("👁️ %s (Similar Account)\n", truncateString(email, maxLen))
-	color.Magenta("  Names used: %s", nameStr)
-	color.Magenta("  Total Commits: %d", commitCount)
-}
 
 // min returns the minimum of two integers
 func min(a, b int) int {
@@ -195,7 +168,7 @@ func getSeparator(termInfo *terminalInfo, maxWidth int) string {
 	if maxWidth > 0 && maxWidth < width {
 		width = maxWidth
 	}
-	return strings.Repeat("─", width)
+	return strings.Repeat("-", width)
 }
 
 func UserInfo(user *gh.User, isOrg bool) {
@@ -215,13 +188,12 @@ func UserInfo(user *gh.User, isOrg bool) {
 		fmt.Print("👤 ")
 		color.HiCyan("USER PROFILE")
 	}
-	fmt.Println(strings.Repeat("═", termInfo.maxDisplay))
 	fmt.Println()
 
 	// Basic info section
 	color.HiWhite("Username: ")
 	color.HiGreen("%s\n", user.GetLogin())
-	
+
 	// Collect all profile fields for display
 	profileFields := []struct {
 		label string
@@ -247,12 +219,12 @@ func UserInfo(user *gh.User, isOrg bool) {
 	// Display profile fields in columns
 	var leftCol, rightCol []string
 	fieldCount := 0
-	
+
 	for _, field := range profileFields {
 		if field.value == "" {
 			continue
 		}
-		
+
 		var displayValue string
 		if field.icon != "" {
 			if field.label == "Twitter" {
@@ -263,9 +235,9 @@ func UserInfo(user *gh.User, isOrg bool) {
 		} else {
 			displayValue = field.value
 		}
-		
+
 		fieldStr := formatField(field.label, displayValue, colWidth)
-		
+
 		if useTwoColumns && fieldCount%2 == 0 {
 			leftCol = append(leftCol, fieldStr)
 		} else {
@@ -280,18 +252,18 @@ func UserInfo(user *gh.User, isOrg bool) {
 		if len(rightCol) > maxRows {
 			maxRows = len(rightCol)
 		}
-		
+
 		for i := 0; i < maxRows; i++ {
 			left := ""
 			right := ""
-			
+
 			if i < len(leftCol) {
 				left = leftCol[i]
 			}
 			if i < len(rightCol) {
 				right = rightCol[i]
 			}
-			
+
 			if left != "" && right != "" {
 				fmt.Printf("%-*s    %s\n", colWidth, left, right)
 			} else if left != "" {
@@ -343,7 +315,7 @@ func UserInfo(user *gh.User, isOrg bool) {
 	var leftStats, rightStats []string
 	for i, stat := range statsFields {
 		statStr := fmt.Sprintf("%s: %v", stat.label, stat.value)
-		
+
 		if useTwoColumns && i%2 == 0 {
 			leftStats = append(leftStats, statStr)
 		} else {
@@ -357,18 +329,18 @@ func UserInfo(user *gh.User, isOrg bool) {
 		if len(rightStats) > maxRows {
 			maxRows = len(rightStats)
 		}
-		
+
 		for i := 0; i < maxRows; i++ {
 			left := ""
 			right := ""
-			
+
 			if i < len(leftStats) {
 				left = leftStats[i]
 			}
 			if i < len(rightStats) {
 				right = rightStats[i]
 			}
-			
+
 			if left != "" && right != "" {
 				fmt.Printf("%-*s    %s\n", colWidth, left, right)
 			} else if left != "" {
@@ -440,15 +412,12 @@ func StreamResults(streamChan <-chan StreamUpdate, showDetails bool, checkSecret
 	lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config) {
 
 	matcher := NewUserMatcher(knownUsername, lookupEmail, user)
-	termInfo := getTerminalInfo()
 
 	orgDomain := ""
 	if isOrg && user != nil {
 		orgDomain = extractDomainFromWebsite(user.GetBlog())
 	}
 
-	fmt.Println("\n\nCollected author information:")
-	fmt.Println(getSeparator(termInfo, 80))
 	fmt.Println()
 
 	seenEmails := make(map[string]bool)
@@ -474,12 +443,12 @@ func StreamResults(streamChan <-chan StreamUpdate, showDetails bool, checkSecret
 
 // EmailProcessResult holds the results of email processing
 type EmailProcessResult struct {
-	totalCommits         int
-	totalContributors    int
-	targetAccounts       map[string][]string
-	similarAccounts      map[string][]string
-	orgMembers           map[string][]string
-	similarOrgMembers    map[string][]string
+	totalCommits      int
+	totalContributors int
+	targetAccounts    map[string][]string
+	similarAccounts   map[string][]string
+	orgMembers        map[string][]string
+	similarOrgMembers map[string][]string
 }
 
 // processEmails processes all emails and returns aggregated results
@@ -524,7 +493,6 @@ func processEmails(ctx *Context, matcher *UserMatcher) *EmailProcessResult {
 			}
 		} else if hasSimilarNames {
 			result.similarAccounts[entry.Email] = names
-			printer.PrintSimilarAccount(entry.Email, names, entry.Details.CommitCount)
 		} else if !opts.ShowTargetOnly {
 			printer.PrintEmail(entry.Email, names, entry.Details.CommitCount, false, false)
 		}
@@ -544,10 +512,7 @@ func shouldShowCommitDetails(opts *DisplayOptions) bool {
 
 // displayResults shows the final results
 func displayResults(ctx *Context, result *EmailProcessResult) {
-	displayAccountInfo(ctx.User, ctx.IsOrg)
-	fmt.Println("\nCollected author information:")
-
-	displayTotals(ctx.ShowTargetOnly, result.totalCommits, result.totalContributors)
+	displayRepositoryStats(ctx.Emails, ctx.UserIdentifiers)
 
 	if ctx.Cfg.TimestampAnalysis {
 		displayTimestampAnalysis(ctx.Emails, ctx.UserIdentifiers)
@@ -706,16 +671,6 @@ func isOrganizationEmail(email, orgDomain string) bool {
 	return emailBase == orgBase && emailBase != "" && orgBase != ""
 }
 
-func displayAccountInfo(user *gh.User, isOrg bool) {
-	if user != nil {
-		accountType := "User"
-		if isOrg {
-			accountType = "Organization"
-		}
-		fmt.Printf("\n%s Account Information:\n", accountType)
-	}
-}
-
 // CommitDisplayer handles commit display logic
 type CommitDisplayer struct {
 	ctx *Context
@@ -822,6 +777,9 @@ func (cd *CommitDisplayer) displayCommitInfo(commit models.CommitInfo, isTargetC
 	if commit.IsFork {
 		color.Cyan("    Fork: true")
 	}
+	if commit.IsExternal {
+		color.HiYellow("    🌍 External: true")
+	}
 }
 
 func (cd *CommitDisplayer) printCommitHighlight(commit models.CommitInfo, commitIcon, authorIcon string) {
@@ -907,9 +865,9 @@ func (sd *SecretDisplayer) displayPattern(pattern string, isTargetCommit bool, e
 	}
 
 	if isTargetCommit {
-		color.HiYellow("      %s", pattern)
+		color.HiYellow("      - %s", pattern)
 	} else {
-		color.Yellow("      %s", pattern)
+		color.Yellow("      - %s", pattern)
 	}
 }
 
@@ -940,6 +898,95 @@ func displayTotals(showTargetOnly bool, totalCommits, totalContributors int) {
 	}
 }
 
+func displayRepositoryStats(emails map[string]*models.EmailDetails, userIdentifiers map[string]bool) {
+	ownRepos := make(map[string]bool)
+	externalRepos := make(map[string]bool)
+	var externalCommits, ownCommits int
+
+	externalEmailData := make(map[string]map[string]int)
+	externalReposList := make(map[string]bool)
+
+	for email, details := range emails {
+		isTargetUser := userIdentifiers[email]
+		if !isTargetUser {
+			for name := range details.Names {
+				if userIdentifiers[name] {
+					isTargetUser = true
+					break
+				}
+			}
+		}
+
+		if isTargetUser {
+			for repo, commits := range details.Commits {
+				for _, commit := range commits {
+					if commit.IsExternal {
+						externalRepos[repo] = true
+						externalCommits++
+
+						if externalEmailData[email] == nil {
+							externalEmailData[email] = make(map[string]int)
+						}
+						externalEmailData[email][repo]++
+						externalReposList[repo] = true
+					} else {
+						ownRepos[repo] = true
+						ownCommits++
+					}
+				}
+			}
+		}
+	}
+
+	if len(externalRepos) > 0 {
+		fmt.Println()
+		fmt.Println()
+		color.HiCyan("🌍 EXTERNAL CONTRIBUTIONS")
+		fmt.Println(getSeparator(getTerminalInfo(), 60))
+		color.Green("• %d external repositories contributed to", len(externalRepos))
+		color.Green("• %d commits to external projects", externalCommits)
+		if ownCommits > 0 {
+			color.Blue("• %d commits to own repositories", ownCommits)
+			percentage := float64(externalCommits) / float64(externalCommits+ownCommits) * 100
+			color.Yellow("• %.1f%% of commits are external contributions", percentage)
+		}
+
+		fmt.Println()
+		color.HiWhite("📧 Email addresses used in external contributions (%d unique):", len(externalEmailData))
+
+		sortedEmails := make([]string, 0, len(externalEmailData))
+		for email := range externalEmailData {
+			sortedEmails = append(sortedEmails, email)
+		}
+		sort.Strings(sortedEmails)
+
+		for _, email := range sortedEmails {
+			repoMap := externalEmailData[email]
+			emailDetails := emails[email]
+			names := extractNames(emailDetails)
+			color.Yellow("• %s", email)
+			if len(names) > 0 {
+				color.White("  Names: %s", strings.Join(names, ", "))
+			}
+
+			var repoNames []string
+			var totalCommits int
+			for repo, count := range repoMap {
+				repoNames = append(repoNames, repo)
+				totalCommits += count
+			}
+			sort.Strings(repoNames)
+
+			color.Cyan("  Repositories (%d commits total):", totalCommits)
+			for _, repo := range repoNames {
+				commitCount := repoMap[repo]
+				color.White("    - %s (%d commits)", repo, commitCount)
+			}
+			fmt.Println()
+		}
+	}
+}
+
 func displaySummary(targetAccounts, similarAccounts, orgMembers, similarOrgMembers map[string][]string, isOrg bool, orgDomain string) {
 	if len(targetAccounts) == 0 && len(similarAccounts) == 0 && len(orgMembers) == 0 && len(similarOrgMembers) == 0 {
 		return
@@ -952,9 +999,9 @@ func displaySummary(targetAccounts, similarAccounts, orgMembers, similarOrgMembe
 	if len(targetAccounts) > 0 {
 		fmt.Println("\n📍  Target User Accounts:")
 		for email, names := range targetAccounts {
-			color.Yellow("  • %s", email)
+			color.Yellow("• %s", email)
 			if len(names) > 0 {
-				color.Green("    Names: %s", strings.Join(names, ", "))
+				color.Green("  Names: %s", strings.Join(names, ", "))
 			}
 		}
 	}
@@ -962,9 +1009,9 @@ func displaySummary(targetAccounts, similarAccounts, orgMembers, similarOrgMembe
 	if len(similarAccounts) > 0 {
 		fmt.Println("\n👁️  Similar Accounts:")
 		for email, names := range similarAccounts {
-			color.Yellow("  • %s", email)
+			color.Yellow("• %s", email)
 			if len(names) > 0 {
-				color.Magenta("    Names: %s", strings.Join(names, ", "))
+				color.Magenta("  Names: %s", strings.Join(names, ", "))
 			}
 		}
 	}
@@ -977,23 +1024,23 @@ func displaySummary(targetAccounts, similarAccounts, orgMembers, similarOrgMembe
 		}
 
 		if len(similarOrgMembers) > 0 {
-			fmt.Println("\n  👁️  Similar to Target (Possible Alternate Accounts):")
+			fmt.Println("\n👁️  Similar to Target (Possible Alternate Accounts):")
 			for email, names := range similarOrgMembers {
-				color.HiYellow("    • %s", email)
+				color.HiYellow("• %s", email)
 				if len(names) > 0 {
-					color.HiMagenta("      Names: %s", strings.Join(names, ", "))
+					color.HiMagenta("  Names: %s", strings.Join(names, ", "))
 				}
 			}
 		}
 
 		if len(orgMembers) > 0 {
 			if len(similarOrgMembers) > 0 {
-				fmt.Println("\n  Other Members:")
+				fmt.Println("\nOther Members:")
 			}
 			for email, names := range orgMembers {
-				color.Yellow("    • %s", email)
+				color.Yellow("• %s", email)
 				if len(names) > 0 {
-					color.Green("      Names: %s", strings.Join(names, ", "))
+					color.Green("  Names: %s", strings.Join(names, ", "))
 				}
 			}
 		}
@@ -1007,9 +1054,9 @@ func displayTimestampAnalysis(emails map[string]*models.EmailDetails, userIdenti
 	termInfo := getTerminalInfo()
 	color.HiCyan("\n🕐 TIMESTAMP ANALYSIS")
 	fmt.Println(getSeparator(termInfo, 60))
-	
+
 	targetCommits := make(map[string][]models.CommitInfo)
-	
+
 	for email, details := range emails {
 		isTargetUser := userIdentifiers[email]
 		if !isTargetUser {
@@ -1020,76 +1067,76 @@ func displayTimestampAnalysis(emails map[string]*models.EmailDetails, userIdenti
 				}
 			}
 		}
-		
+
 		if isTargetUser {
 			for _, commits := range details.Commits {
 				targetCommits[email] = append(targetCommits[email], commits...)
 			}
 		}
 	}
-	
+
 	if len(targetCommits) == 0 {
 		color.Yellow("No target user commits found for analysis.")
 		return
 	}
-	
+
 	var allTargetCommits []models.CommitInfo
 	for _, commits := range targetCommits {
 		allTargetCommits = append(allTargetCommits, commits...)
 	}
-	
+
 	patterns := utils.GetTimestampPatterns(allTargetCommits)
-	
+
 	fmt.Printf("\n📊 Target User Commit Patterns (%d commits):\n", patterns["total_commits"])
 	displayGeneralPatterns(patterns)
-	
+
 	// Display aggregated hourly graph for all target commits
 	if len(allTargetCommits) >= 10 {
 		fmt.Println()
 		displayAggregatedHourlyGraph(patterns)
 	}
-	
+
 	fmt.Println("\n📍 Individual Target User Analysis:")
 	for email, commits := range targetCommits {
 		if len(commits) >= 3 {
 			displayUserTimestampAnalysis(email, commits)
 		}
 	}
-	
+
 	displaySuspiciousPatterns(allTargetCommits)
 }
 
 func displayGeneralPatterns(patterns map[string]interface{}) {
 	if unusualPct, ok := patterns["unusual_hour_percentage"].(float64); ok && unusualPct > 0 {
-		color.Yellow("  • %.1f%% commits during unusual hours (10pm-6am local time)", unusualPct)
+		color.Yellow("• %.1f%% commits during unusual hours (10pm-6am local time)", unusualPct)
 	}
-	
+
 	if weekendPct, ok := patterns["weekend_percentage"].(float64); ok && weekendPct > 0 {
-		color.Cyan("  • %.1f%% commits on weekends", weekendPct)
+		color.Cyan("• %.1f%% commits on weekends", weekendPct)
 	}
-	
+
 	if nightOwlPct, ok := patterns["night_owl_percentage"].(float64); ok && nightOwlPct > 10 {
-		color.Magenta("  • %.1f%% night owl commits (10pm-2am local time)", nightOwlPct)
+		color.Magenta("• %.1f%% night owl commits (10pm-2am local time)", nightOwlPct)
 	}
-	
+
 	if earlyBirdPct, ok := patterns["early_bird_percentage"].(float64); ok && earlyBirdPct > 10 {
-		color.Green("  • %.1f%% early bird commits (5am-7am local time)", earlyBirdPct)
+		color.Green("• %.1f%% early bird commits (5am-7am local time)", earlyBirdPct)
 	}
-	
+
 	if mostActiveHour, ok := patterns["most_active_hour"].(int); ok {
-		color.Blue("  • Most active hour: %02d:00 local time", mostActiveHour)
+		color.Blue("• Most active hour: %02d:00 local time", mostActiveHour)
 	}
-	
+
 	if mostActiveDay, ok := patterns["most_active_day"].(time.Weekday); ok {
-		color.Blue("  • Most active day: %s", mostActiveDay.String())
+		color.Blue("• Most active day: %s", mostActiveDay.String())
 	}
-	
+
 	if mostActiveTZ, ok := patterns["most_active_timezone"].(string); ok && mostActiveTZ != "" {
-		color.HiBlue("  • Most common timezone: %s", mostActiveTZ)
+		color.HiBlue("• Most common timezone: %s", mostActiveTZ)
 	}
-	
+
 	if tzDist, ok := patterns["timezone_distribution"].(map[string]int); ok && len(tzDist) > 1 {
-		color.HiYellow("  • Multiple timezones detected: %d different zones", len(tzDist))
+		color.HiYellow("• Multiple timezones detected: %d different zones", len(tzDist))
 		displayTimezoneDistribution(tzDist)
 	}
 }
@@ -1099,51 +1146,51 @@ func displayTimezoneDistribution(tzDist map[string]int) {
 		zone  string
 		count int
 	}
-	
+
 	var zones []tzEntry
 	for tz, count := range tzDist {
 		zones = append(zones, tzEntry{tz, count})
 	}
-	
+
 	sort.Slice(zones, func(i, j int) bool {
 		return zones[i].count > zones[j].count
 	})
-	
+
 	for i, zone := range zones {
 		if i >= 3 {
 			break
 		}
-		color.White("    - %s: %d commits", zone.zone, zone.count)
+		color.White("  - %s: %d commits", zone.zone, zone.count)
 	}
 }
 
 func displayUserTimestampAnalysis(email string, commits []models.CommitInfo) {
 	patterns := utils.GetTimestampPatterns(commits)
-	
-	color.HiWhite("  %s (%d commits):", email, len(commits))
-	
+
+	color.HiWhite("%s (%d commits):", email, len(commits))
+
 	if mostActiveTZ, ok := patterns["most_active_timezone"].(string); ok && mostActiveTZ != "" {
-		color.HiBlue("    🌍 Primary timezone: %s", mostActiveTZ)
+		color.HiBlue("  🌍 Primary timezone: %s", mostActiveTZ)
 	}
-	
+
 	if tzDist, ok := patterns["timezone_distribution"].(map[string]int); ok && len(tzDist) > 1 {
-		color.HiYellow("    📍 Multiple timezones: %d zones detected", len(tzDist))
+		color.HiYellow("  📍 Multiple timezones: %d zones detected", len(tzDist))
 	}
-	
+
 	if unusualPct, ok := patterns["unusual_hour_percentage"].(float64); ok && unusualPct > 30 {
-		color.HiYellow("    ⚠️  %.1f%% unusual hour commits (in stated timezone)", unusualPct)
+		color.HiYellow("  ⚠️  %.1f%% unusual hour commits (in stated timezone)", unusualPct)
 	}
-	
+
 	if nightOwlPct, ok := patterns["night_owl_percentage"].(float64); ok && nightOwlPct > 20 {
-		color.HiMagenta("    🌙 %.1f%% night owl pattern (10pm-2am local)", nightOwlPct)
+		color.HiMagenta("  🌙 %.1f%% night owl pattern (10pm-2am local)", nightOwlPct)
 	}
-	
+
 	if earlyBirdPct, ok := patterns["early_bird_percentage"].(float64); ok && earlyBirdPct > 20 {
-		color.HiGreen("    🌅 %.1f%% early bird pattern (5am-7am local)", earlyBirdPct)
+		color.HiGreen("  🌅 %.1f%% early bird pattern (5am-7am local)", earlyBirdPct)
 	}
-	
+
 	if mostActiveHour, ok := patterns["most_active_hour"].(int); ok {
-		color.HiCyan("    ⏰ Most active: %02d:00 local time", mostActiveHour)
+		color.HiCyan("  ⏰ Most active: %02d:00 local time", mostActiveHour)
 	}
 }
 
@@ -1169,14 +1216,14 @@ func displayAggregatedHourlyGraph(patterns map[string]interface{}) {
 
 	barWidth := min(termInfo.graphWidth, 50)
 	scale := float64(barWidth) / float64(maxCommits)
-	
+
 	for hour := 0; hour < 24; hour++ {
 		count := hourDist[hour]
 		barLength := int(float64(count) * scale)
 
-		bar := strings.Repeat("█", barLength)
+		bar := strings.Repeat("#", barLength)
 
-		fmt.Printf("%02d:00 │", hour)
+		fmt.Printf("%02d:00 |", hour)
 
 		if count > 0 {
 			var coloredBar string
@@ -1197,7 +1244,7 @@ func displayAggregatedHourlyGraph(patterns map[string]interface{}) {
 	}
 
 	separatorLen := barWidth + 5
-	color.White("     └%s┘", strings.Repeat("─", separatorLen))
+	color.White("     +%s+", strings.Repeat("-", separatorLen))
 	color.White("     🔴 Night Owl  🟢 Early Bird  🔵 Work Hours  🟡 Other")
 }
 
@@ -1223,9 +1270,9 @@ func displaySuspiciousPatterns(commits []models.CommitInfo) {
 			}
 
 			localTimeStr := commit.AuthorDate.Format("2006-01-02 15:04:05")
-			color.Yellow("  • %s at %s (%s)", commit.Hash[:8], localTimeStr, commit.TimestampAnalysis.CommitTimezone)
+			color.Yellow("• %s at %s (%s)", commit.Hash[:8], localTimeStr, commit.TimestampAnalysis.CommitTimezone)
 			if commit.TimestampAnalysis.TimeZoneHint != "" {
-				color.White("    %s", commit.TimestampAnalysis.TimeZoneHint)
+				color.White("  %s", commit.TimestampAnalysis.TimeZoneHint)
 			}
 		}
 	} else if len(suspiciousCommits) > 15 {
@@ -1234,51 +1281,51 @@ func displaySuspiciousPatterns(commits []models.CommitInfo) {
 }
 
 type JSONOutput struct {
-	Target          string                 `json:"target"`
-	IsOrg           bool                   `json:"is_org"`
-	User            *JSONUser              `json:"user,omitempty"`
-	Emails          []JSONEmailEntry       `json:"emails"`
-	TotalCommits    int                    `json:"total_commits"`
-	TotalContributors int                  `json:"total_contributors"`
+	Target            string           `json:"target"`
+	IsOrg             bool             `json:"is_org"`
+	User              *JSONUser        `json:"user,omitempty"`
+	Emails            []JSONEmailEntry `json:"emails"`
+	TotalCommits      int              `json:"total_commits"`
+	TotalContributors int              `json:"total_contributors"`
 }
 
 type JSONUser struct {
-	Login     string `json:"login"`
-	Name      string `json:"name,omitempty"`
-	Email     string `json:"email,omitempty"`
-	Company   string `json:"company,omitempty"`
-	Location  string `json:"location,omitempty"`
-	Bio       string `json:"bio,omitempty"`
-	Blog      string `json:"blog,omitempty"`
-	Twitter   string `json:"twitter,omitempty"`
-	Followers int    `json:"followers"`
-	Following int    `json:"following"`
-	PublicRepos int  `json:"public_repos"`
+	Login       string `json:"login"`
+	Name        string `json:"name,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Company     string `json:"company,omitempty"`
+	Location    string `json:"location,omitempty"`
+	Bio         string `json:"bio,omitempty"`
+	Blog        string `json:"blog,omitempty"`
+	Twitter     string `json:"twitter,omitempty"`
+	Followers   int    `json:"followers"`
+	Following   int    `json:"following"`
+	PublicRepos int    `json:"public_repos"`
 }
 
 type JSONEmailEntry struct {
-	Email       string          `json:"email"`
-	Names       []string        `json:"names"`
-	CommitCount int             `json:"commit_count"`
-	IsTarget    bool            `json:"is_target"`
-	Repositories []JSONRepo     `json:"repositories"`
+	Email        string     `json:"email"`
+	Names        []string   `json:"names"`
+	CommitCount  int        `json:"commit_count"`
+	IsTarget     bool       `json:"is_target"`
+	Repositories []JSONRepo `json:"repositories"`
 }
 
 type JSONRepo struct {
-	Name    string             `json:"name"`
-	Commits []JSONCommit       `json:"commits"`
+	Name    string       `json:"name"`
+	Commits []JSONCommit `json:"commits"`
 }
 
 type JSONCommit struct {
-	Hash          string    `json:"hash"`
-	URL           string    `json:"url"`
-	Message       string    `json:"message,omitempty"`
-	AuthorName    string    `json:"author_name"`
-	AuthorEmail   string    `json:"author_email"`
-	AuthorDate    time.Time `json:"author_date"`
-	CommitterName string    `json:"committer_name,omitempty"`
-	CommitterEmail string   `json:"committer_email,omitempty"`
-	Secrets       []string  `json:"secrets,omitempty"`
+	Hash           string    `json:"hash"`
+	URL            string    `json:"url"`
+	Message        string    `json:"message,omitempty"`
+	AuthorName     string    `json:"author_name"`
+	AuthorEmail    string    `json:"author_email"`
+	AuthorDate     time.Time `json:"author_date"`
+	CommitterName  string    `json:"committer_name,omitempty"`
+	CommitterEmail string    `json:"committer_email,omitempty"`
+	Secrets        []string  `json:"secrets,omitempty"`
 }
 
 func outputJSON(ctx *Context, matcher *UserMatcher) {
@@ -1320,10 +1367,10 @@ func outputJSON(ctx *Context, matcher *UserMatcher) {
 		}
 
 		jsonEntry := JSONEmailEntry{
-			Email:       entry.Email,
-			Names:       extractNames(entry.Details),
-			CommitCount: entry.Details.CommitCount,
-			IsTarget:    isTarget,
+			Email:        entry.Email,
+			Names:        extractNames(entry.Details),
+			CommitCount:  entry.Details.CommitCount,
+			IsTarget:     isTarget,
 			Repositories: make([]JSONRepo, 0),
 		}
 

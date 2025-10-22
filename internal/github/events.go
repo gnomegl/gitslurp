@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"git.sr.ht/~gnome/gitslurp/internal/models"
-	"git.sr.ht/~gnome/gitslurp/internal/scanner"
+	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/internal/scanner"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/schollz/progressbar/v3"
 )
@@ -24,7 +24,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	emails := make(map[string]*models.EmailDetails)
 
 	fmt.Println()
-	color.HiCyan("════════════════════════════════════════════════════════════════════")
+	color.HiCyan("=====================================================================")
 
 	if checkSecrets && cfg.ShowInteresting {
 		color.HiWhite("🔍  Quick Mode: Recent Activity Scan (Secrets & Patterns)")
@@ -36,7 +36,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 		color.HiWhite("🔍  Quick Mode: Recent Activity Scan")
 	}
 
-	color.HiCyan("════════════════════════════════════════════════════════════════════")
+	color.HiCyan("=====================================================================")
 	fmt.Println()
 	color.Yellow("   ℹ️   Use --deep flag for complete commit history across all repos")
 	fmt.Println()
@@ -52,11 +52,11 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 		progressbar.OptionSpinnerType(14),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]█[reset]",
-			SaucerHead:    "[green]█[reset]",
-			SaucerPadding: "[white]░[reset]",
-			BarStart:      "[blue]▐[reset]",
-			BarEnd:        "[blue]▌[reset]",
+			Saucer:        "[green]#[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: "[white].[reset]",
+			BarStart:      "[blue]|[reset]",
+			BarEnd:        "[blue]|[reset]",
 		}))
 
 	for {
@@ -94,11 +94,11 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 		progressbar.OptionSetDescription("[cyan]   ⚙️   Processing events[reset]"),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]█[reset]",
-			SaucerHead:    "[green]█[reset]",
-			SaucerPadding: "[white]░[reset]",
-			BarStart:      "[blue]▐[reset]",
-			BarEnd:        "[blue]▌[reset]",
+			Saucer:        "[green]#[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: "[white].[reset]",
+			BarStart:      "[blue]|[reset]",
+			BarEnd:        "[blue]|[reset]",
 		}))
 
 	for _, event := range allEvents {
@@ -231,15 +231,15 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	bar := progressbar.NewOptions(totalRepos,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
-    progressbar.OptionSetWidth(10),
+		progressbar.OptionSetWidth(10),
 		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]▓[reset]",
-			SaucerHead:    "[green]▓[reset]",
-			SaucerPadding: "[white]░[reset]",
-			BarStart:      "[blue]│[reset]",
-			BarEnd:        "[blue]│[reset]",
+			Saucer:        "[green]#[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: "[white].[reset]",
+			BarStart:      "[blue]|[reset]",
+			BarEnd:        "[blue]|[reset]",
 		}))
 
 	for _, repo := range repos {
@@ -261,11 +261,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 
 		for {
 			<-rateLimiter.C // Rate limit each API call
-			commits, resp, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
-			if err != nil {
-				color.Yellow("[!]  Skipping repo %s: %v", repo.GetFullName(), err)
-				break
-			}
+			commits, resp, _:= client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 
 			// Classify commits (direct vs merge)
 			for _, commit := range commits {
@@ -315,20 +311,6 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	}
 
 	bar.Finish()
-
-	fmt.Println()
-	color.HiGreen("   ✓  Analysis Complete!")
-	fmt.Println()
-	if cfg.QuickMode {
-		color.HiCyan("   ⚡  Quick Mode Statistics:")
-	} else {
-		color.HiCyan("   📊  Repository Analysis Statistics:")
-	}
-	color.Blue("      • Repositories analyzed: %d", totalRepos)
-	color.Blue("      • Commits processed: %d", totalCommitsProcessed)
-	color.Blue("      • Direct commits: %d", totalDirectCommits)
-	color.Blue("      • Merge commits: %d", totalMergeCommits)
-	color.Blue("      • Unique contributors: %d", len(emails))
 
 	if len(emails) > 0 {
 		domainStats := make(map[string]int)
@@ -408,11 +390,11 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]━[reset]",
-			SaucerHead:    "[green]⟩[reset]",
-			SaucerPadding: "[white]╌[reset]",
-			BarStart:      "[blue]┃[reset]",
-			BarEnd:        "[blue]┃[reset]",
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: "[white].[reset]",
+			BarStart:      "[blue]|[reset]",
+			BarEnd:        "[blue]|[reset]",
 		}))
 
 	for _, repo := range repos {
@@ -424,13 +406,7 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 			ListOptions: gh.ListOptions{PerPage: maxCommitsPerRepo},
 		}
 
-		commits, _, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
-		if err != nil {
-			color.Yellow("[!]  Skipping repo %s: %v", repo.GetFullName(), err)
-			bar.Add(1)
-			continue
-		}
-
+		commits, _, _:= client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 		var repoCommits []models.CommitInfo
 		for _, commit := range commits {
 			commitInfo := ProcessCommit(commit, false, cfg) // Force checkSecrets to false
@@ -444,4 +420,3 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 	bar.Finish()
 	return emails
 }
-

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"git.sr.ht/~gnome/gitslurp/internal/github"
+	"github.com/gnomegl/gitslurp/internal/github"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/urfave/cli/v2"
 )
@@ -26,5 +26,5 @@ func SetupGitHubClient(c *cli.Context, ctx context.Context) (*gh.Client, error) 
 
 func checkLatestVersion(ctx context.Context, client *gh.Client) {
 	// Version checking disabled for sr.ht - no equivalent API
-	// To check for updates manually: go install git.sr.ht/~gnome/gitslurp@latest
+	// To check for updates manually: go install github.com/gnomegl/gitslurp@latest
 }

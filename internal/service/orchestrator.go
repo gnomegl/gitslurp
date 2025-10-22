@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"git.sr.ht/~gnome/gitslurp/internal/config"
-	"git.sr.ht/~gnome/gitslurp/internal/display"
-	"git.sr.ht/~gnome/gitslurp/internal/github"
-	"git.sr.ht/~gnome/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/internal/config"
+	"github.com/gnomegl/gitslurp/internal/display"
+	"github.com/gnomegl/gitslurp/internal/github"
+	"github.com/gnomegl/gitslurp/internal/models"
 	gh "github.com/google/go-github/v57/github"
 )
 
@@ -82,6 +82,24 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		emails = o.processGists(ctx, gists, emails, &cfg)
 	}
 
+	// fetch external contributions (not in any repos that they own)
+	externalEmails, err := github.FetchExternalContributions(ctx, o.client, username, o.config.CheckSecrets, &cfg)
+	if err == nil && len(externalEmails) > 0 {
+		for email, details := range externalEmails {
+			if existing, ok := emails[email]; ok {
+				for name := range details.Names {
+					existing.Names[name] = struct{}{}
+				}
+				for repoName, commits := range details.Commits {
+					existing.Commits[repoName] = append(existing.Commits[repoName], commits...)
+				}
+				existing.CommitCount += details.CommitCount
+			} else {
+				emails[email] = details
+			}
+		}
+	}
+
 	if len(emails) == 0 {
 		return o.handleNoEmails(isOrg, username, len(repos))
 	}
@@ -111,13 +129,8 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 	if github.IsValidEmail(o.config.Target) {
 		lookupEmail = o.config.Target
 		fmt.Println()
-		color.HiCyan("════════════════════════════════════════════════════════════════════")
-		color.HiWhite("🔍  Email-Based Investigation")
-		color.HiCyan("════════════════════════════════════════════════════════════════════")
-		fmt.Println()
-		color.Blue("   📧  Target Email: %s", o.config.Target)
-		color.Yellow("   🔎  Searching GitHub API for associated account...")
-		
+		color.Blue("📧  Target Email: %s", o.config.Target)
+
 		// Check for delete_repo permissions when targeting an email
 		hasDeleteRepo, permErr := github.CheckDeleteRepoPermissions(ctx, o.client)
 		if permErr != nil {
@@ -169,7 +182,7 @@ func (o *Orchestrator) resolveTarget(ctx context.Context) (username, lookupEmail
 		fmt.Println()
 		color.Blue("Target Username: %s", username)
 	}
-	
+
 	return username, lookupEmail, nil
 }
 
@@ -258,13 +271,13 @@ func (o *Orchestrator) buildUserIdentifiers(username, lookupEmail string, user *
 		username:    true,
 		lookupEmail: true,
 	}
-	
+
 	if user != nil {
 		identifiers[user.GetLogin()] = true
 		identifiers[user.GetName()] = true
 		identifiers[user.GetEmail()] = true
 	}
-	
+
 	return identifiers
 }
 
@@ -277,7 +290,7 @@ func (o *Orchestrator) processGists(ctx context.Context, gists []*gh.Gist, email
 	} else {
 		scanType = "interesting patterns"
 	}
-	
+
 	color.Blue("\nProcessing %d public gists for %s...", len(gists), scanType)
 	gistEmails := github.ProcessGists(ctx, o.client, gists, o.config.CheckSecrets, cfg)
 
@@ -294,7 +307,7 @@ func (o *Orchestrator) processGists(ctx context.Context, gists []*gh.Gist, email
 			emails[email] = details
 		}
 	}
-	
+
 	return emails
 }
 
@@ -316,7 +329,7 @@ func (o *Orchestrator) outputEventList(list []string, filename, header, emoji st
 	}
 
 	content := strings.Join(list, "\n")
-	
+
 	if len(list) > 50 {
 		if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to write file %s: %v", filename, err)
@@ -331,6 +344,6 @@ func (o *Orchestrator) outputEventList(list []string, filename, header, emoji st
 			return fmt.Errorf("failed to write file %s: %v", filename, err)
 		}
 	}
-	
+
 	return nil
 }
