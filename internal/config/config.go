@@ -20,6 +20,10 @@ type AppConfig struct {
 
 	OutputFormat string
 	Target       string
+
+	TokenFile string
+	Proxy     string
+	ProxyFile string
 }
 
 // extracts the username/email from command line args, ignoring flags
@@ -31,6 +35,9 @@ func findTarget() (string, error) {
 	// TODO: enumerate the flags for this
 	flagsWithValues := map[string]bool{
 		"-t": true, "--token": true,
+		"--token-file": true,
+		"-P": true, "--proxy": true,
+		"--proxy-file": true,
 	}
 
 	for i := 0; i < len(args); i++ {
@@ -90,5 +97,9 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 
 		OutputFormat: outputFormat,
 		Target:       target,
+
+		TokenFile: c.String("token-file"),
+		Proxy:     c.String("proxy"),
+		ProxyFile: c.String("proxy-file"),
 	}, nil
 }

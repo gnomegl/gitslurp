@@ -50,13 +50,12 @@ type EmailProcessResult struct {
 	similarOrgMembers map[string][]string
 }
 
-type JSONOutput struct {
-	Target            string           `json:"target"`
-	IsOrg             bool             `json:"is_org"`
-	User              *JSONUser        `json:"user,omitempty"`
-	Emails            []JSONEmailEntry `json:"emails"`
-	TotalCommits      int              `json:"total_commits"`
-	TotalContributors int              `json:"total_contributors"`
+type NDJSONMeta struct {
+	Target            string    `json:"target"`
+	IsOrg             bool      `json:"is_org"`
+	User              *JSONUser `json:"user,omitempty"`
+	TotalCommits      int       `json:"total_commits"`
+	TotalContributors int       `json:"total_contributors"`
 }
 
 type JSONUser struct {
