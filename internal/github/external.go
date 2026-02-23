@@ -16,7 +16,7 @@ type ExternalCommit struct {
 	CommitInfo models.CommitInfo
 }
 
-func FetchExternalContributions(ctx context.Context, client *gh.Client, username string, checkSecrets bool, cfg *Config) (map[string]*models.EmailDetails, error) {
+func FetchExternalContributions(ctx context.Context, pool *ClientPool, username string, checkSecrets bool, cfg *Config) (map[string]*models.EmailDetails, error) {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
@@ -33,7 +33,11 @@ func FetchExternalContributions(ctx context.Context, client *gh.Client, username
 		},
 	}
 
-	result, _, err := client.Search.Commits(ctx, query, opts)
+	mc := pool.GetClient()
+	result, resp, err := mc.Client.Search.Commits(ctx, query, opts)
+	if resp != nil {
+		mc.UpdateRateLimit(resp.Rate.Remaining, resp.Rate.Reset.Time)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("error searching commits: %v", err)
 	}
@@ -54,7 +58,11 @@ func FetchExternalContributions(ctx context.Context, client *gh.Client, username
 				PerPage: 100,
 			},
 		}
-		result2, _, err := client.Search.Commits(ctx, query, opts2)
+		mc2 := pool.GetClient()
+		result2, resp2, err := mc2.Client.Search.Commits(ctx, query, opts2)
+		if resp2 != nil {
+			mc2.UpdateRateLimit(resp2.Rate.Remaining, resp2.Rate.Reset.Time)
+		}
 		if err == nil && result2 != nil {
 			allResults = append(allResults, result2.Commits...)
 		}
@@ -72,7 +80,11 @@ func FetchExternalContributions(ctx context.Context, client *gh.Client, username
 					Page:    middlePage,
 				},
 			}
-			result3, _, err := client.Search.Commits(ctx, query, opts3)
+			mc3 := pool.GetClient()
+			result3, resp3, err := mc3.Client.Search.Commits(ctx, query, opts3)
+			if resp3 != nil {
+				mc3.UpdateRateLimit(resp3.Rate.Remaining, resp3.Rate.Reset.Time)
+			}
 			if err == nil && result3 != nil {
 				allResults = append(allResults, result3.Commits...)
 			}

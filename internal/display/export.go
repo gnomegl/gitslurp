@@ -4,24 +4,32 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"time"
 )
 
-func outputJSON(ctx *Context, matcher *UserMatcher) {
+func outputJSON(w io.Writer, ctx *Context, matcher *UserMatcher) {
 	sortedEmails := sortEmailsByCommitCount(ctx.Emails)
+	encoder := json.NewEncoder(w)
 
-	output := JSONOutput{
+	totalCommits := 0
+	for _, entry := range sortedEmails {
+		isTarget := matcher.IsTargetUser(entry.Email, entry.Details)
+		if isTarget {
+			totalCommits += entry.Details.CommitCount
+		}
+	}
+
+	meta := NDJSONMeta{
 		Target:            ctx.KnownUsername,
 		IsOrg:             ctx.IsOrg,
-		Emails:            make([]JSONEmailEntry, 0),
-		TotalCommits:      0,
+		TotalCommits:      totalCommits,
 		TotalContributors: len(sortedEmails),
 	}
 
 	if ctx.User != nil {
-		output.User = &JSONUser{
+		meta.User = &JSONUser{
 			Login:       ctx.User.GetLogin(),
 			Name:        ctx.User.GetName(),
 			Email:       ctx.User.GetEmail(),
@@ -36,15 +44,13 @@ func outputJSON(ctx *Context, matcher *UserMatcher) {
 		}
 	}
 
+	encoder.Encode(meta)
+
 	for _, entry := range sortedEmails {
 		isTarget := matcher.IsTargetUser(entry.Email, entry.Details)
 
 		if ctx.ShowTargetOnly && !isTarget {
 			continue
-		}
-
-		if isTarget {
-			output.TotalCommits += entry.Details.CommitCount
 		}
 
 		jsonEntry := JSONEmailEntry{
@@ -79,20 +85,14 @@ func outputJSON(ctx *Context, matcher *UserMatcher) {
 			jsonEntry.Repositories = append(jsonEntry.Repositories, jsonRepo)
 		}
 
-		output.Emails = append(output.Emails, jsonEntry)
-	}
-
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(output); err != nil {
-		fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+		encoder.Encode(jsonEntry)
 	}
 }
 
-func outputCSV(ctx *Context, matcher *UserMatcher) {
+func outputCSV(w io.Writer, ctx *Context, matcher *UserMatcher) {
 	sortedEmails := sortEmailsByCommitCount(ctx.Emails)
 
-	writer := csv.NewWriter(os.Stdout)
+	writer := csv.NewWriter(w)
 	defer writer.Flush()
 
 	headers := []string{
@@ -112,7 +112,7 @@ func outputCSV(ctx *Context, matcher *UserMatcher) {
 	}
 
 	if err := writer.Write(headers); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing CSV headers: %v\n", err)
+		fmt.Fprintf(w, "Error writing CSV headers: %v\n", err)
 		return
 	}
 
@@ -153,11 +153,10 @@ func outputCSV(ctx *Context, matcher *UserMatcher) {
 				}
 
 				if err := writer.Write(row); err != nil {
-					fmt.Fprintf(os.Stderr, "Error writing CSV row: %v\n", err)
+					fmt.Fprintf(w, "Error writing CSV row: %v\n", err)
 					return
 				}
 			}
 		}
 	}
 }
-

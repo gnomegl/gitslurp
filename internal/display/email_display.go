@@ -2,6 +2,7 @@ package display
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -42,7 +43,7 @@ func (cp *ColorPrinter) PrintEmail(email string, names []string, commitCount int
 }
 
 func Results(emails map[string]*models.EmailDetails, showDetails bool, checkSecrets bool,
-	lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config, outputFormat string) {
+	lookupEmail string, knownUsername string, user *gh.User, showTargetOnly bool, isOrg bool, cfg *github.Config, outputFormat string, w io.Writer) {
 
 	matcher := NewUserMatcher(knownUsername, lookupEmail, user)
 	matcher.targetNames = extractTargetUserNames(emails, matcher.identifiers)
@@ -69,9 +70,9 @@ func Results(emails map[string]*models.EmailDetails, showDetails bool, checkSecr
 
 	switch outputFormat {
 	case "json":
-		outputJSON(ctx, matcher)
+		outputJSON(w, ctx, matcher)
 	case "csv":
-		outputCSV(ctx, matcher)
+		outputCSV(w, ctx, matcher)
 	default:
 		displayEmailDomains(ctx)
 		result := processEmails(ctx, matcher)
