@@ -24,30 +24,26 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	emails := make(map[string]*models.EmailDetails)
 
 	fmt.Println()
-	color.HiCyan("=====================================================================")
-
 	if checkSecrets && cfg.ShowInteresting {
-		color.HiWhite("🔍  Quick Mode: Recent Activity Scan (Secrets & Patterns)")
+		color.Cyan("Quick Mode: Recent Activity Scan (Secrets & Patterns)")
 	} else if checkSecrets {
-		color.HiWhite("🔍  Quick Mode: Recent Activity Scan (Secrets)")
+		color.Cyan("Quick Mode: Recent Activity Scan (Secrets)")
 	} else if cfg.ShowInteresting {
-		color.HiWhite("🔍  Quick Mode: Recent Activity Scan (Patterns)")
+		color.Cyan("Quick Mode: Recent Activity Scan (Patterns)")
 	} else {
-		color.HiWhite("🔍  Quick Mode: Recent Activity Scan")
+		color.Cyan("Quick Mode: Recent Activity Scan")
 	}
 
-	color.HiCyan("=====================================================================")
+	color.Yellow("[!] Use --deep flag for complete commit history across all repos")
 	fmt.Println()
-	color.Yellow("   ℹ️   Use --deep flag for complete commit history across all repos")
-	fmt.Println()
-	color.Blue("   🌐  Fetching recent GitHub events from API...")
+	color.Blue("Fetching recent GitHub events from API...")
 
 	var allEvents []*gh.Event
 	opts := &gh.ListOptions{PerPage: 100}
 
 	bar := progressbar.NewOptions(-1,
 		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionSetDescription("[cyan]   📡  Fetching event stream...[reset]"),
+		progressbar.OptionSetDescription("[cyan]Fetching event stream[reset]"),
 		progressbar.OptionSetWidth(20),
 		progressbar.OptionSpinnerType(14),
 		progressbar.OptionSetWriter(os.Stderr),
@@ -78,20 +74,20 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	bar.Finish()
 
 	if len(allEvents) == 0 {
-		color.Yellow("   ⚠️   No recent events found for user: %s", username)
+		color.Yellow("[!] No recent events found for user: %s", username)
 		return emails
 	}
 
-	color.Green("   ✓  Found %d recent events", len(allEvents))
+	color.Green("[+] Found %d recent events", len(allEvents))
 	fmt.Println()
-	color.Blue("   🔬  Analyzing events for commit data...")
+	color.Blue("Analyzing events for commit data...")
 
 	commitCount := 0
 	processBar := progressbar.NewOptions(len(allEvents),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
 		progressbar.OptionSetWidth(20),
-		progressbar.OptionSetDescription("[cyan]   ⚙️   Processing events[reset]"),
+		progressbar.OptionSetDescription("[cyan]Processing events[reset]"),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]#[reset]",
@@ -114,9 +110,9 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 
 	fmt.Println()
 	if commitCount > 0 {
-		color.Green("   ✓  Extracted %d commits from %d push events", commitCount, len(allEvents))
+		color.Green("[+] Extracted %d commits from %d push events", commitCount, len(allEvents))
 	} else {
-		color.Yellow("   ⚠️   No commits found in recent events")
+		color.Yellow("[!] No commits found in recent events")
 	}
 
 	return emails
@@ -223,9 +219,9 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	totalMergeCommits := 0
 
 	// Progress tracking
-	progressDescription := "[cyan]Slurping repositories[reset]"
+	progressDescription := "[cyan]Processing repositories[reset]"
 	if cfg.QuickMode {
-		progressDescription = "[cyan]⚡ Slurping repositories[reset]"
+		progressDescription = "[cyan]Processing repositories (quick)[reset]"
 	}
 
 	bar := progressbar.NewOptions(totalRepos,
@@ -322,7 +318,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		}
 
 		fmt.Println()
-		color.HiCyan("   📧  Email Domain Distribution (Top 10):")
+		color.Cyan("Email Domain Distribution (Top 10):")
 		type domainCount struct {
 			domain string
 			count  int
@@ -344,7 +340,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 			if i >= 10 {
 				break
 			}
-			color.Blue("      • %s: %d contributors", d.domain, d.count)
+			fmt.Printf("  %s: %d contributors\n", d.domain, d.count)
 		}
 	}
 
@@ -374,11 +370,11 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 	// Add progress bar for fallback processing
 	var progressDescription string
 	if checkSecrets && cfg.ShowInteresting {
-		progressDescription = "[cyan]Processing repos for secrets and patterns 🐽[reset]"
+		progressDescription = "[cyan]Processing repos (secrets + patterns)[reset]"
 	} else if checkSecrets {
-		progressDescription = "[cyan]Processing repos for secrets 🐽[reset]"
+		progressDescription = "[cyan]Processing repos (secrets)[reset]"
 	} else if cfg.ShowInteresting {
-		progressDescription = "[cyan]Processing repos for patterns ⭐[reset]"
+		progressDescription = "[cyan]Processing repos (patterns)[reset]"
 	} else {
 		progressDescription = "[cyan]Processing repositories[reset]"
 	}
