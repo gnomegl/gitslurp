@@ -16,7 +16,7 @@ func FetchOrgRepos(ctx context.Context, client *github.Client, orgName string, c
 	}
 
 	fmt.Println()
-	color.Blue("   📦  Enumerating organization repositories...")
+	color.Blue("Enumerating organization repositories...")
 
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByOrgOptions{
@@ -37,7 +37,7 @@ func FetchOrgRepos(ctx context.Context, client *github.Client, orgName string, c
 		opt.Page = resp.NextPage
 	}
 
-	color.Green("   ✓  Found %d organization repositories", len(allRepos))
+	color.Green("[+] Found %d organization repositories", len(allRepos))
 
 	return allRepos, nil
 }

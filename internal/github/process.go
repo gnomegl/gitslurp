@@ -41,10 +41,10 @@ func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) 
 		}
 
 		if info.AuthorEmail == "" && info.CommitterEmail == "" {
-			info.AuthorName = "🥷 Anonymous"
+			info.AuthorName = "Anonymous"
 			info.AuthorEmail = ""
 			if info.CommitterName == "" {
-				info.CommitterName = "🥷 Anonymous"
+				info.CommitterName = "Anonymous"
 			}
 			if info.CommitterEmail == "" {
 				info.CommitterEmail = ""
@@ -108,27 +108,27 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 
 	var progressDescription string
 	if checkSecrets && cfg.ShowInteresting {
-		progressDescription = "[cyan]Sniffing repositories for secrets and patterns 🐽[reset]"
+		progressDescription = "[cyan]Processing repositories (secrets + patterns)[reset]"
 	} else if checkSecrets {
-		progressDescription = "[cyan]Sniffing repositories for secrets 🐽[reset]"
+		progressDescription = "[cyan]Processing repositories (secrets)[reset]"
 	} else if cfg.ShowInteresting {
-		progressDescription = "[cyan]Slurping repositories for interesting patterns ⭐[reset]"
+		progressDescription = "[cyan]Processing repositories (patterns)[reset]"
 	} else {
-		progressDescription = "[cyan]Slurping repositories[reset]"
+		progressDescription = "[cyan]Processing repositories[reset]"
 	}
 
 	bar := progressbar.NewOptions(len(repos),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
-		progressbar.OptionSetWidth(20),
+		progressbar.OptionSetWidth(10),
 		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]█[reset]",
-			SaucerHead:    "[green]█[reset]",
-			SaucerPadding: "[white]░[reset]",
-			BarStart:      "[blue]▐[reset]",
-			BarEnd:        "[blue]▌[reset]",
+			Saucer:        "[green]#[reset]",
+			SaucerHead:    "[green]#[reset]",
+			SaucerPadding: "-",
+			BarStart:      "[",
+			BarEnd:        "]",
 		}))
 
 	for _, repo := range repos {
@@ -199,27 +199,27 @@ func ProcessReposStreaming(ctx context.Context, client *gh.Client, repos []*gh.R
 
 	var progressDescription string
 	if checkSecrets && cfg.ShowInteresting {
-		progressDescription = "[cyan]Sniffing repositories for secrets and patterns 🐽[reset]"
+		progressDescription = "[cyan]Processing repositories (secrets + patterns)[reset]"
 	} else if checkSecrets {
-		progressDescription = "[cyan]Sniffing repositories for secrets 🐽[reset]"
+		progressDescription = "[cyan]Processing repositories (secrets)[reset]"
 	} else if cfg.ShowInteresting {
-		progressDescription = "[cyan]Slurping repositories for interesting patterns ⭐[reset]"
+		progressDescription = "[cyan]Processing repositories (patterns)[reset]"
 	} else {
-		progressDescription = "[cyan]Slurping repositories[reset]"
+		progressDescription = "[cyan]Processing repositories[reset]"
 	}
 
 	bar := progressbar.NewOptions(len(repos),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
-		progressbar.OptionSetWidth(20),
+		progressbar.OptionSetWidth(10),
 		progressbar.OptionSetDescription(progressDescription),
 		progressbar.OptionSetWriter(os.Stderr),
 		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "[green]█[reset]",
-			SaucerHead:    "[green]█[reset]",
-			SaucerPadding: "[white]░[reset]",
-			BarStart:      "[blue]▐[reset]",
-			BarEnd:        "[blue]▌[reset]",
+			Saucer:        "[green]#[reset]",
+			SaucerHead:    "[green]#[reset]",
+			SaucerPadding: "-",
+			BarStart:      "[",
+			BarEnd:        "]",
 		}))
 
 	for _, repo := range repos {
@@ -340,7 +340,7 @@ func scanContent(scanner *scanner.Scanner, text, location string, checkSecrets b
 			if match.Type == "Secret" && checkSecrets {
 				findings = append(findings, fmt.Sprintf("%s: %s (in %s)", match.Name, match.Value, location))
 			} else if match.Type == "Interesting" && showInteresting {
-				findings = append(findings, fmt.Sprintf("⭐ %s: %s (in %s)", match.Name, match.Value, location))
+				findings = append(findings, fmt.Sprintf("INTERESTING: %s: %s (in %s)", match.Name, match.Value, location))
 			}
 		}
 	}

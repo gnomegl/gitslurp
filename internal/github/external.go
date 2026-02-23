@@ -133,7 +133,7 @@ func FetchExternalContributions(ctx context.Context, client *gh.Client, username
 					if match.Type == "Secret" && checkSecrets {
 						commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s", match.Name, match.Value))
 					} else if match.Type == "Interesting" && cfg.ShowInteresting {
-						commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s", match.Name, match.Value))
+						commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("INTERESTING: %s: %s", match.Name, match.Value))
 					}
 				}
 			}

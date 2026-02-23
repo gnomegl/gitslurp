@@ -35,7 +35,7 @@ func FetchReposWithUser(ctx context.Context, client *github.Client, username str
 	}
 
 	fmt.Println()
-	color.Blue("📦  Enumerating user repositories...")
+	color.Blue("Enumerating user repositories...")
 
 	var allRepos []*github.Repository
 	opt := &github.RepositoryListByUserOptions{
@@ -69,12 +69,12 @@ func FetchReposWithUser(ctx context.Context, client *github.Client, username str
 	}
 
 	if cfg.IncludeForks {
-		color.Green("✓  Found %d repositories (including forks)", len(allRepos))
+		color.Green("[+] Found %d repositories (including forks)", len(allRepos))
 	} else {
 		if filteredForks > 0 {
-			color.Green("✓  Found %d owned repositories (%d forks excluded)", len(allRepos), filteredForks)
+			color.Green("[+] Found %d owned repositories (%d forks excluded)", len(allRepos), filteredForks)
 		} else {
-			color.Green("✓  Found %d repositories", len(allRepos))
+			color.Green("[+] Found %d repositories", len(allRepos))
 		}
 	}
 
@@ -142,10 +142,10 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 
 			// Handle anonymous commits
 			if commitInfo.AuthorEmail == "" && commitInfo.CommitterEmail == "" {
-				commitInfo.AuthorName = "🥷 Anonymous"
+				commitInfo.AuthorName = "Anonymous"
 				commitInfo.AuthorEmail = ""
 				if commitInfo.CommitterName == "" {
-					commitInfo.CommitterName = "🥷 Anonymous"
+					commitInfo.CommitterName = "Anonymous"
 				}
 				if commitInfo.CommitterEmail == "" {
 					commitInfo.CommitterEmail = ""
@@ -165,7 +165,7 @@ func FetchCommits(ctx context.Context, client *github.Client, owner, repo string
 						if match.Type == "Secret" {
 							commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("%s: %s", match.Name, match.Value))
 						} else if match.Type == "Interesting" {
-							commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("⭐ %s: %s", match.Name, match.Value))
+							commitInfo.Secrets = append(commitInfo.Secrets, fmt.Sprintf("INTERESTING: %s: %s", match.Name, match.Value))
 						}
 					}
 				}

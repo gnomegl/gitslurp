@@ -38,12 +38,12 @@ func NewApp(action cli.ActionFunc) *cli.App {
 			&cli.BoolFlag{
 				Name:    "secrets",
 				Aliases: []string{"s"},
-				Usage:   "🐽 Enable sniffing for secrets in commits",
+				Usage:   "Enable scanning for secrets in commits",
 			},
 			&cli.BoolFlag{
 				Name:    "interesting",
 				Aliases: []string{"i"},
-				Usage:   "⭐ Get interesting strings",
+				Usage:   "Get interesting strings",
 			},
 			&cli.BoolFlag{
 				Name:    "show-stargazers",
@@ -72,12 +72,12 @@ func NewApp(action cli.ActionFunc) *cli.App {
 			&cli.BoolFlag{
 				Name:    "quick",
 				Aliases: []string{"q"},
-				Usage:   "⚡ Quick mode - fetch ~50 most recent commits per repo",
+				Usage:   "Quick mode - fetch ~50 most recent commits per repo",
 			},
 			&cli.BoolFlag{
 				Name:    "timestamp-analysis",
 				Aliases: []string{"T"},
-				Usage:   "🕐 Analyze commit timestamps for unusual patterns",
+				Usage:   "Analyze commit timestamps for unusual patterns",
 			},
 			&cli.BoolFlag{
 				Name:    "include-forks",
