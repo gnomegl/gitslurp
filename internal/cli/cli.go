@@ -84,6 +84,19 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Aliases: []string{"F"},
 				Usage:   "Include forked repositories in the scan (default: only owned repos)",
 			},
+			&cli.StringFlag{
+				Name:  "token-file",
+				Usage: "Path to file with one GitHub token per line",
+			},
+			&cli.StringFlag{
+				Name:    "proxy",
+				Aliases: []string{"P"},
+				Usage:   "Proxy URL (user:pass@host:port)",
+			},
+			&cli.StringFlag{
+				Name:  "proxy-file",
+				Usage: "Path to file with one proxy per line",
+			},
 		},
 		Action:    action,
 		ArgsUsage: "<username|email>",

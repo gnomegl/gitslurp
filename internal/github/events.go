@@ -14,8 +14,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-// ProcessUserEvents processes user events using the GitHub Events API (more efficient)
-func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
+func ProcessUserEvents(ctx context.Context, pool *ClientPool, username string, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
@@ -55,8 +54,12 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 			BarEnd:        "[blue]|[reset]",
 		}))
 
+	mc := pool.GetClient()
 	for {
-		events, resp, err := client.Activity.ListEventsPerformedByUser(ctx, username, false, opts)
+		events, resp, err := mc.Client.Activity.ListEventsPerformedByUser(ctx, username, false, opts)
+		if resp != nil {
+			mc.UpdateRateLimit(resp.Rate.Remaining, resp.Rate.Reset.Time)
+		}
 		if err != nil {
 			color.Yellow("[!]  Warning: Could not fetch user events: %v", err)
 			break
@@ -65,7 +68,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 		allEvents = append(allEvents, events...)
 		bar.Add(len(events))
 
-		if resp.NextPage == 0 || len(allEvents) >= 300 { // Limit to recent activity
+		if resp.NextPage == 0 || len(allEvents) >= 300 {
 			break
 		}
 		opts.Page = resp.NextPage
@@ -99,7 +102,7 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 
 	for _, event := range allEvents {
 		if event.Type != nil && *event.Type == "PushEvent" {
-			commits := processEventCommits(ctx, client, event, checkSecrets, cfg)
+			commits := processEventCommits(event, checkSecrets, cfg)
 			commitCount += len(commits)
 			aggregateCommits(emails, commits, event.Repo.GetFullName(), targetUserIdentifiers, showTargetOnly)
 		}
@@ -118,17 +121,14 @@ func ProcessUserEvents(ctx context.Context, client *gh.Client, username string, 
 	return emails
 }
 
-// processEventCommits extracts commit information from push events
-func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event, checkSecrets bool, cfg *Config) []models.CommitInfo {
+func processEventCommits(event *gh.Event, checkSecrets bool, cfg *Config) []models.CommitInfo {
 	var commits []models.CommitInfo
 
-	// Get the payload - it's a function that returns interface{}
 	payloadData := event.Payload()
 	if payloadData == nil {
 		return commits
 	}
 
-	// Parse push event payload
 	payload, ok := payloadData.(map[string]interface{})
 	if !ok {
 		return commits
@@ -147,7 +147,6 @@ func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event
 
 		var commitInfo models.CommitInfo
 
-		// Extract basic commit info
 		if sha, ok := commit["sha"].(string); ok {
 			commitInfo.Hash = sha
 		}
@@ -158,7 +157,6 @@ func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event
 			commitInfo.URL = url
 		}
 
-		// Extract author info
 		if author, ok := commit["author"].(map[string]interface{}); ok {
 			if name, ok := author["name"].(string); ok {
 				commitInfo.AuthorName = name
@@ -168,13 +166,11 @@ func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event
 			}
 		}
 
-		// Set timestamp from event
 		if event.CreatedAt != nil {
 			commitInfo.AuthorDate = event.CreatedAt.Time
 			commitInfo.CommitterDate = event.CreatedAt.Time
 		}
 
-		// Set committer info (usually same as author for push events)
 		if commitInfo.CommitterName == "" {
 			commitInfo.CommitterName = commitInfo.AuthorName
 		}
@@ -182,12 +178,10 @@ func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event
 			commitInfo.CommitterEmail = commitInfo.AuthorEmail
 		}
 
-		// Skip anonymous commits unless they have some identifying info
 		if commitInfo.AuthorEmail == "" && commitInfo.AuthorName == "" {
 			continue
 		}
 
-		// Scan commit message for secrets/patterns if enabled
 		if (checkSecrets || cfg.ShowInteresting) && commitInfo.Message != "" {
 			secretScanner := scanner.NewScanner(cfg.ShowInteresting)
 			commitInfo.Secrets = append(commitInfo.Secrets,
@@ -200,8 +194,7 @@ func processEventCommits(ctx context.Context, client *gh.Client, event *gh.Event
 	return commits
 }
 
-// RateLimitedProcessRepos performs comprehensive contributor enumeration for --deep mode
-func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
+func RateLimitedProcessRepos(ctx context.Context, pool *ClientPool, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
@@ -209,8 +202,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 
 	emails := make(map[string]*models.EmailDetails)
 
-	// Rate limiting setup
-	rateLimiter := time.NewTicker(time.Millisecond * 200) // 5 requests per second max
+	rateLimiter := time.NewTicker(time.Millisecond * 200)
 	defer rateLimiter.Stop()
 
 	totalRepos := len(repos)
@@ -218,7 +210,6 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	totalDirectCommits := 0
 	totalMergeCommits := 0
 
-	// Progress tracking
 	progressDescription := "[cyan]Processing repositories[reset]"
 	if cfg.QuickMode {
 		progressDescription = "[cyan]Processing repositories (quick)[reset]"
@@ -239,13 +230,13 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		}))
 
 	for _, repo := range repos {
-		<-rateLimiter.C // Rate limit
+		<-rateLimiter.C
 
+		mc := pool.GetClient()
 		repoDirectCommits := 0
 		repoMergeCommits := 0
 		var allRepoCommits []*gh.RepositoryCommit
 
-		// Fetch ALL commits from this repository (paginated)
 		perPage := 100
 		if cfg.QuickMode {
 			perPage = 50
@@ -256,10 +247,12 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 		}
 
 		for {
-			<-rateLimiter.C // Rate limit each API call
-			commits, resp, _:= client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+			<-rateLimiter.C
+			commits, resp, _ := mc.Client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+			if resp != nil {
+				mc.UpdateRateLimit(resp.Rate.Remaining, resp.Rate.Reset.Time)
+			}
 
-			// Classify commits (direct vs merge)
 			for _, commit := range commits {
 				if len(commit.Parents) <= 1 {
 					repoDirectCommits++
@@ -270,33 +263,31 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 
 			allRepoCommits = append(allRepoCommits, commits...)
 
-			if resp.NextPage == 0 || cfg.QuickMode {
+			if resp == nil || resp.NextPage == 0 || cfg.QuickMode {
 				break
 			}
 			opts.Page = resp.NextPage
 		}
 
-		// Process commits for this repository
 		var repoCommitInfos []models.CommitInfo
 		for _, commit := range allRepoCommits {
-			// For deep mode, optionally fetch full commit details for secrets scanning
-			// Skip fetching full commit details in quick mode to save API calls
 			if (checkSecrets || cfg.ShowInteresting) && !cfg.QuickMode {
-				<-rateLimiter.C // Rate limit
-				fullCommit, _, err := client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
+				<-rateLimiter.C
+				fullCommit, getResp, err := mc.Client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
+				if getResp != nil {
+					mc.UpdateRateLimit(getResp.Rate.Remaining, getResp.Rate.Reset.Time)
+				}
 				if err == nil {
 					commit = fullCommit
 				}
 			}
 
 			commitInfo := ProcessCommit(commit, checkSecrets, cfg)
-			// Only include commits with email addresses for contributor analysis
 			if commitInfo.AuthorEmail != "" && strings.Contains(commitInfo.AuthorEmail, "@") {
 				repoCommitInfos = append(repoCommitInfos, commitInfo)
 			}
 		}
 
-		// Aggregate commits for this repository
 		aggregateCommits(emails, repoCommitInfos, repo.GetFullName(), targetUserIdentifiers, showTargetOnly)
 
 		totalCommitsProcessed += len(allRepoCommits)
@@ -347,8 +338,7 @@ func RateLimitedProcessRepos(ctx context.Context, client *gh.Client, repos []*gh
 	return emails
 }
 
-// ProcessReposLimited processes only recent commits from repos (API-friendly fallback)
-func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
+func ProcessReposLimited(ctx context.Context, pool *ClientPool, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
@@ -356,7 +346,6 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 
 	emails := make(map[string]*models.EmailDetails)
 
-	// Limit repos but process more recent commits from each
 	maxRepos := 10
 	maxCommitsPerRepo := 50
 
@@ -367,7 +356,6 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 
 	color.Blue("[>] Light processing: %d repos, max %d recent commits each", len(repos), maxCommitsPerRepo)
 
-	// Add progress bar for fallback processing
 	var progressDescription string
 	if checkSecrets && cfg.ShowInteresting {
 		progressDescription = "[cyan]Processing repos (secrets + patterns)[reset]"
@@ -394,18 +382,21 @@ func ProcessReposLimited(ctx context.Context, client *gh.Client, repos []*gh.Rep
 		}))
 
 	for _, repo := range repos {
-		// Small delay to be nice to the API
 		time.Sleep(time.Millisecond * 100)
 
-		// Get only recent commits
+		mc := pool.GetClient()
 		opts := &gh.CommitsListOptions{
 			ListOptions: gh.ListOptions{PerPage: maxCommitsPerRepo},
 		}
 
-		commits, _, _:= client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+		commits, resp, _ := mc.Client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+		if resp != nil {
+			mc.UpdateRateLimit(resp.Rate.Remaining, resp.Rate.Reset.Time)
+		}
+
 		var repoCommits []models.CommitInfo
 		for _, commit := range commits {
-			commitInfo := ProcessCommit(commit, false, cfg) // Force checkSecrets to false
+			commitInfo := ProcessCommit(commit, false, cfg)
 			repoCommits = append(repoCommits, commitInfo)
 		}
 

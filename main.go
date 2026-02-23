@@ -1,53 +1,70 @@
 package main
 
 import (
-	"context"
-	"log"
+	"fmt"
+	"io"
 	"os"
+	"strings"
 
+	"github.com/fatih/color"
 	"github.com/gnomegl/gitslurp/internal/auth"
 	cliPkg "github.com/gnomegl/gitslurp/internal/cli"
 	"github.com/gnomegl/gitslurp/internal/config"
-	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/service"
 	"github.com/urfave/cli/v2"
 )
 
-const helpTemplate = `{{.Name}} - {{.Usage}}
-
-Usage: {{.HelpName}} [options] <username|email>
-
-Options:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}`
-
-func runApp(c *cli.Context) error {
-	appConfig, err := config.ParseConfig(c)
-	if err != nil {
-		return err
+func hasStructuredOutputFlag() bool {
+	for _, arg := range os.Args[1:] {
+		if arg == "--json" || arg == "--csv" {
+			return true
+		}
+		if arg == "--" {
+			return false
+		}
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") {
+			if strings.ContainsRune(arg, 'j') {
+				return true
+			}
+		}
 	}
-
-	if appConfig == nil {
-		return nil
-	}
-
-	ctx := context.Background()
-	client, err := auth.SetupGitHubClient(c, ctx)
-	if err != nil {
-		return err
-	}
-
-	token := github.GetToken(c)
-	orchestrator := service.NewOrchestrator(client, appConfig, token)
-	return orchestrator.Run(ctx)
+	return false
 }
 
 func main() {
-	log.SetFlags(0)
+	realStdout := os.Stdout
+	realStderr := os.Stderr
 
-	app := cliPkg.NewApp(runApp)
+	if hasStructuredOutputFlag() {
+		devNull, _ := os.Open(os.DevNull)
+		defer devNull.Close()
+		os.Stdout = devNull
+		os.Stderr = devNull
+		color.Output = io.Discard
+	}
+
+	app := cliPkg.NewApp(func(c *cli.Context) error {
+		appConfig, err := config.ParseConfig(c)
+		if err != nil {
+			return err
+		}
+
+		if appConfig == nil {
+			return nil
+		}
+
+		ctx := c.Context
+		pool, err := auth.SetupClientPool(c, ctx, appConfig)
+		if err != nil {
+			return err
+		}
+
+		orchestrator := service.NewOrchestrator(pool, appConfig, realStdout)
+		return orchestrator.Run(ctx)
+	})
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(realStderr, err)
+		os.Exit(1)
 	}
 }

@@ -28,7 +28,7 @@ func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) 
 			info.AuthorName = commit.Commit.Author.GetName()
 			info.AuthorEmail = commit.Commit.Author.GetEmail()
 			info.AuthorDate = commit.Commit.Author.GetDate().Time
-			
+
 			if cfg.TimestampAnalysis {
 				info.TimestampAnalysis = utils.AnalyzeTimestamp(info.AuthorDate)
 			}
@@ -54,14 +54,11 @@ func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) 
 		if checkSecrets || cfg.ShowInteresting {
 			secretScanner := scanner.NewScanner(cfg.ShowInteresting)
 
-			// Scan commit message
 			message := commit.GetCommit().GetMessage()
 			info.Secrets = append(info.Secrets, scanContent(secretScanner, message, "commit message", checkSecrets, cfg.ShowInteresting)...)
 
-			// Scan files changed in the commit
 			for _, file := range commit.Files {
 				filename := file.GetFilename()
-				// Skip node_modules and package manager files
 				if cfg.SkipNodeModules && (strings.Contains(filename, "/node_modules/") || strings.HasPrefix(filename, "node_modules/") || filename == "Cargo.lock") {
 					continue
 				}
@@ -79,7 +76,6 @@ func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) 
 	return info
 }
 
-// ExtractLinks extracts URLs from text
 func ExtractLinks(text string) []string {
 	var links []string
 	words := strings.Fields(text)
@@ -95,7 +91,7 @@ func ExtractLinks(text string) []string {
 	return links
 }
 
-func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
+func ProcessRepos(ctx context.Context, pool *ClientPool, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
@@ -138,13 +134,17 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 			sem <- true
 			defer func() { <-sem }()
 
+			mc := pool.GetClient()
 			var allCommits []*gh.RepositoryCommit
 			opts := &gh.CommitsListOptions{
 				ListOptions: gh.ListOptions{PerPage: 100},
 			}
 
 			for {
-				commits, resp, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+				commits, resp, err := mc.Client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+				if resp != nil {
+					mc.UpdateRateLimit(resp.Rate.Remaining, resp.Rate.Reset.Time)
+				}
 				if err != nil {
 					break
 				}
@@ -158,7 +158,10 @@ func ProcessRepos(ctx context.Context, client *gh.Client, repos []*gh.Repository
 			var repoCommits []models.CommitInfo
 			for _, commit := range allCommits {
 				if checkSecrets || cfg.ShowInteresting {
-					fullCommit, _, err := client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
+					fullCommit, getResp, err := mc.Client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
+					if getResp != nil {
+						mc.UpdateRateLimit(getResp.Rate.Remaining, getResp.Rate.Reset.Time)
+					}
 					if err == nil {
 						commit = fullCommit
 					}
@@ -186,7 +189,7 @@ type EmailUpdate struct {
 	RepoName string
 }
 
-func ProcessReposStreaming(ctx context.Context, client *gh.Client, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool, updateChan chan<- EmailUpdate) map[string]*models.EmailDetails {
+func ProcessReposStreaming(ctx context.Context, pool *ClientPool, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool, updateChan chan<- EmailUpdate) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
@@ -229,13 +232,17 @@ func ProcessReposStreaming(ctx context.Context, client *gh.Client, repos []*gh.R
 			sem <- true
 			defer func() { <-sem }()
 
+			mc := pool.GetClient()
 			var allCommits []*gh.RepositoryCommit
 			opts := &gh.CommitsListOptions{
 				ListOptions: gh.ListOptions{PerPage: 100},
 			}
 
 			for {
-				commits, resp, err := client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+				commits, resp, err := mc.Client.Repositories.ListCommits(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+				if resp != nil {
+					mc.UpdateRateLimit(resp.Rate.Remaining, resp.Rate.Reset.Time)
+				}
 				if err != nil {
 					break
 				}
@@ -249,7 +256,10 @@ func ProcessReposStreaming(ctx context.Context, client *gh.Client, repos []*gh.R
 			var repoCommits []models.CommitInfo
 			for _, commit := range allCommits {
 				if checkSecrets || cfg.ShowInteresting {
-					fullCommit, _, err := client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
+					fullCommit, getResp, err := mc.Client.Repositories.GetCommit(ctx, repo.GetOwner().GetLogin(), repo.GetName(), commit.GetSHA(), &gh.ListOptions{})
+					if getResp != nil {
+						mc.UpdateRateLimit(getResp.Rate.Remaining, getResp.Rate.Reset.Time)
+					}
 					if err == nil {
 						commit = fullCommit
 					}
@@ -332,7 +342,6 @@ func aggregateCommitsStreaming(emails map[string]*models.EmailDetails, commits [
 	return newEmails
 }
 
-// scanContent scans text for secrets and interesting patterns
 func scanContent(scanner *scanner.Scanner, text, location string, checkSecrets bool, showInteresting bool) []string {
 	var findings []string
 	if matches := scanner.ScanText(text); len(matches) > 0 {
@@ -347,8 +356,7 @@ func scanContent(scanner *scanner.Scanner, text, location string, checkSecrets b
 	return findings
 }
 
-// ProcessGists processes gists for commit information
-func ProcessGists(ctx context.Context, client *gh.Client, gists []*gh.Gist, checkSecrets bool, cfg *Config) map[string]*models.EmailDetails {
+func ProcessGists(ctx context.Context, pool *ClientPool, gists []*gh.Gist, checkSecrets bool, cfg *Config) map[string]*models.EmailDetails {
 	emails := make(map[string]*models.EmailDetails)
 
 	for _, gist := range gists {
@@ -360,18 +368,15 @@ func ProcessGists(ctx context.Context, client *gh.Client, gists []*gh.Gist, chec
 			Hash:        gist.GetID(),
 			URL:         gist.GetHTMLURL(),
 			AuthorName:  gist.GetOwner().GetLogin(),
-			AuthorEmail: "", // Gists don't expose email directly
+			AuthorEmail: "",
 		}
 
 		if checkSecrets || cfg.ShowInteresting {
 			secretScanner := scanner.NewScanner(cfg.ShowInteresting)
 
-			// Scan gist description
 			commitInfo.Secrets = append(commitInfo.Secrets, scanContent(secretScanner, gist.GetDescription(), "description", checkSecrets, cfg.ShowInteresting)...)
 
-			// Scan each file's content
 			for filename, file := range gist.Files {
-				// Skip node_modules and package manager files
 				if cfg.SkipNodeModules && (strings.Contains(string(filename), "/node_modules/") || strings.HasPrefix(string(filename), "node_modules/")) {
 					continue
 				}
@@ -407,35 +412,32 @@ func ProcessGists(ctx context.Context, client *gh.Client, gists []*gh.Gist, chec
 	return emails
 }
 
-// isPackageManagerFile returns true if the filename is a package manager file
 func isPackageManagerFile(filename string) bool {
 	packageFiles := []string{
-		"package.json", "package-lock.json", // npm
-		"yarn.lock", ".yarnrc", ".yarnrc.yml", // yarn
-		"pnpm-lock.yaml", ".pnpmrc", // pnpm
-		"npm-shrinkwrap.json", ".npmrc", // npm
-		"composer.json", "composer.lock", // php
-		"Gemfile", "Gemfile.lock", // ruby
-		"requirements.txt", "poetry.lock", "Pipfile", "Pipfile.lock", // python
-		"go.mod", "go.sum", // golang
-		"build.gradle", "gradle.properties", "settings.gradle", // gradle
-		"pom.xml", "build.xml", // maven
-		"mix.exs", "mix.lock", // elixir
-		"sbt.build", "build.sbt", // scala
-		"cargo.toml", "cargo.lock", // rust
+		"package.json", "package-lock.json",
+		"yarn.lock", ".yarnrc", ".yarnrc.yml",
+		"pnpm-lock.yaml", ".pnpmrc",
+		"npm-shrinkwrap.json", ".npmrc",
+		"composer.json", "composer.lock",
+		"Gemfile", "Gemfile.lock",
+		"requirements.txt", "poetry.lock", "Pipfile", "Pipfile.lock",
+		"go.mod", "go.sum",
+		"build.gradle", "gradle.properties", "settings.gradle",
+		"pom.xml", "build.xml",
+		"mix.exs", "mix.lock",
+		"sbt.build", "build.sbt",
+		"cargo.toml", "cargo.lock",
 	}
 
 	return slices.Contains(packageFiles, filename)
 }
 
-// email -> commit mapping
 func aggregateCommits(emails map[string]*models.EmailDetails, commits []models.CommitInfo, repoName string, targetUserIdentifiers map[string]bool, showTargetOnly bool) {
 	for _, commit := range commits {
 		if commit.AuthorEmail == "" {
 			continue
 		}
 
-		// only filter commits when showing target only
 		if showTargetOnly && targetUserIdentifiers != nil {
 			isTargetUser := targetUserIdentifiers[commit.AuthorEmail] || targetUserIdentifiers[commit.AuthorName]
 			if !isTargetUser {

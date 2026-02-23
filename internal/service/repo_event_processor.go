@@ -5,17 +5,18 @@ import (
 	"sort"
 
 	"github.com/fatih/color"
+	"github.com/gnomegl/gitslurp/internal/github"
 	gh "github.com/google/go-github/v57/github"
 )
 
 type RepoEventProcessor struct {
-	client *gh.Client
+	pool   *github.ClientPool
 	target string
 }
 
-func NewRepoEventProcessor(client *gh.Client, target string) *RepoEventProcessor {
+func NewRepoEventProcessor(pool *github.ClientPool, target string) *RepoEventProcessor {
 	return &RepoEventProcessor{
-		client: client,
+		pool:   pool,
 		target: target,
 	}
 }
@@ -29,14 +30,16 @@ func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository
 	}
 
 	for _, repo := range repos {
+		client := p.pool.GetClient().Client
+
 		if showStargazers {
-			if err := p.collectStargazers(ctx, repo, stargazers, opts); err != nil {
+			if err := p.collectStargazers(ctx, client, repo, stargazers, opts); err != nil {
 				continue
 			}
 		}
 
 		if showForkers {
-			if err := p.collectForkers(ctx, repo, forkers, opts); err != nil {
+			if err := p.collectForkers(ctx, client, repo, forkers, opts); err != nil {
 				continue
 			}
 		}
@@ -61,8 +64,8 @@ func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository
 	return nil
 }
 
-func (p *RepoEventProcessor) collectStargazers(ctx context.Context, repo *gh.Repository, stargazers map[string]struct{}, opts *gh.ListOptions) error {
-	stargazerList, _, err := p.client.Activity.ListStargazers(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
+func (p *RepoEventProcessor) collectStargazers(ctx context.Context, client *gh.Client, repo *gh.Repository, stargazers map[string]struct{}, opts *gh.ListOptions) error {
+	stargazerList, _, err := client.Activity.ListStargazers(ctx, repo.GetOwner().GetLogin(), repo.GetName(), opts)
 	if err != nil {
 		color.Yellow("[!]  Warning: Could not fetch stargazers for %s: %v", repo.GetFullName(), err)
 		return err
@@ -73,8 +76,8 @@ func (p *RepoEventProcessor) collectStargazers(ctx context.Context, repo *gh.Rep
 	return nil
 }
 
-func (p *RepoEventProcessor) collectForkers(ctx context.Context, repo *gh.Repository, forkers map[string]struct{}, opts *gh.ListOptions) error {
-	forks, _, err := p.client.Repositories.ListForks(ctx, repo.GetOwner().GetLogin(), repo.GetName(), &gh.RepositoryListForksOptions{
+func (p *RepoEventProcessor) collectForkers(ctx context.Context, client *gh.Client, repo *gh.Repository, forkers map[string]struct{}, opts *gh.ListOptions) error {
+	forks, _, err := client.Repositories.ListForks(ctx, repo.GetOwner().GetLogin(), repo.GetName(), &gh.RepositoryListForksOptions{
 		ListOptions: *opts,
 	})
 	if err != nil {
