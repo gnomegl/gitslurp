@@ -118,7 +118,7 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 	commit, _, err := client.Repositories.GetCommit(ctx, createdRepo.GetOwner().GetLogin(), repoName, commitSHA, nil)
 	if err == nil && commit.GetAuthor() != nil && commit.GetAuthor().GetLogin() != "" {
 		username := commit.GetAuthor().GetLogin()
-		color.Green("[✓] Found username via API: %s", username)
+		color.Green("[+] Found username via API: %s", username)
 		return username, nil
 	}
 
@@ -142,7 +142,7 @@ func GetUsernameFromEmailSpoof(ctx context.Context, client *github.Client, email
 		return "", fmt.Errorf("failed to scrape username: %v", err)
 	}
 
-	color.Green("[✓] Found username via scraping: %s", username)
+	color.Green("[+] Found username via scraping: %s", username)
 	return username, nil
 }
 

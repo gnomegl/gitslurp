@@ -226,30 +226,25 @@ func DisplayRateLimit(ctx context.Context, client *github.Client) {
 	resetLocal := rateLimitInfo.ResetTime.In(now.Location())
 	timeUntilReset := resetLocal.Sub(now)
 
+	fmt.Println()
 	fmt.Println(strings.Repeat("-", 50))
 
 	percentage := float64(rateLimitInfo.Remaining) / float64(rateLimitInfo.Limit) * 100
 	if percentage > 50 {
-		color.HiGreen("Remaining queries: %d/%d (%.1f%%)",
+		color.Green("API: %d/%d (%.1f%%)",
 			rateLimitInfo.Remaining, rateLimitInfo.Limit, percentage)
 	} else if percentage > 20 {
-		color.HiYellow("Remaining queries: %d/%d (%.1f%%)",
+		color.Yellow("API: %d/%d (%.1f%%)",
 			rateLimitInfo.Remaining, rateLimitInfo.Limit, percentage)
 	} else {
-		color.HiRed("Remaining queries: %d/%d (%.1f%%)",
+		color.Red("API: %d/%d (%.1f%%)",
 			rateLimitInfo.Remaining, rateLimitInfo.Limit, percentage)
 	}
 
 	if timeUntilReset > 0 {
-		color.HiBlue("Rate limit resets at: %s (in %v)",
-			resetLocal.Format("2006-01-02 15:04:05 MST"),
-			timeUntilReset.Round(time.Second))
+		color.Blue("Resets: %s",
+			resetLocal.Format("2006-01-02 15:04:05"))
 	} else {
-		color.HiGreen("Rate limit has already reset")
+		color.Green("Rate limit has already reset")
 	}
-
-	if rateLimitInfo.Remaining < 100 {
-		color.Yellow("\n⚠️  Warning: Low on API queries. Consider waiting or using a different token.")
-	}
-	fmt.Println()
 }

@@ -46,14 +46,14 @@ func (p *RepoEventProcessor) Process(ctx context.Context, repos []*gh.Repository
 
 	if showForkers {
 		forkersList := sortedKeys(forkers)
-		if err := orchestrator.outputEventList(forkersList, p.target+"_forkers.txt", "Repository Forkers:", "🔱"); err != nil {
+		if err := orchestrator.outputEventList(forkersList, p.target+"_forkers.txt", "Repository Forkers:", ""); err != nil {
 			return err
 		}
 	}
 
 	if showStargazers {
 		stargazersList := sortedKeys(stargazers)
-		if err := orchestrator.outputEventList(stargazersList, p.target+"_stargazers.txt", "Repository Stargazers:", "⭐"); err != nil {
+		if err := orchestrator.outputEventList(stargazersList, p.target+"_stargazers.txt", "Repository Stargazers:", ""); err != nil {
 			return err
 		}
 	}
