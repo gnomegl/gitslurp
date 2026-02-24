@@ -194,13 +194,14 @@ func processEventCommits(event *gh.Event, checkSecrets bool, cfg *Config) []mode
 	return commits
 }
 
-func RateLimitedProcessRepos(ctx context.Context, pool *ClientPool, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool) map[string]*models.EmailDetails {
+func RateLimitedProcessRepos(ctx context.Context, pool *ClientPool, repos []*gh.Repository, checkSecrets bool, cfg *Config, targetUserIdentifiers map[string]bool, showTargetOnly bool, updateChan chan<- EmailUpdate) map[string]*models.EmailDetails {
 	if cfg == nil {
 		cfg = &Config{}
 		*cfg = DefaultConfig()
 	}
 
 	emails := make(map[string]*models.EmailDetails)
+	seenEmails := make(map[string]bool)
 
 	rateLimiter := time.NewTicker(time.Millisecond * 200)
 	defer rateLimiter.Stop()
@@ -289,6 +290,15 @@ func RateLimitedProcessRepos(ctx context.Context, pool *ClientPool, repos []*gh.
 		}
 
 		aggregateCommits(emails, repoCommitInfos, repo.GetFullName(), targetUserIdentifiers, showTargetOnly)
+
+		if updateChan != nil {
+			for email, details := range emails {
+				if !seenEmails[email] {
+					seenEmails[email] = true
+					updateChan <- EmailUpdate{Email: email, Details: details, RepoName: repo.GetFullName()}
+				}
+			}
+		}
 
 		totalCommitsProcessed += len(allRepoCommits)
 		totalDirectCommits += repoDirectCommits

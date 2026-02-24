@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 	"github.com/gnomegl/gitslurp/internal/config"
@@ -73,7 +74,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 	userIdentifiers := o.buildUserIdentifiers(username, lookupEmail, user)
 
-	emails := github.RateLimitedProcessRepos(ctx, o.pool, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly)
+	if o.config.OutputFormat == "json" {
+		return o.runStreamingJSON(ctx, repos, gists, username, lookupEmail, user, isOrg, userIdentifiers, &cfg)
+	}
+
+	emails := github.RateLimitedProcessRepos(ctx, o.pool, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly, nil)
 
 	if len(gists) > 0 && (o.config.CheckSecrets || cfg.ShowInteresting) {
 		emails = o.processGists(ctx, gists, emails, &cfg)
@@ -103,6 +108,59 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	display.Results(emails, o.config.ShowDetails, o.config.CheckSecrets, lookupEmail, username, user, o.config.ShowTargetOnly, isOrg, &cfg, o.config.OutputFormat, o.dataWriter)
 
 	o.pool.DisplayPoolRateLimit(ctx)
+
+	return nil
+}
+
+func (o *Orchestrator) runStreamingJSON(ctx context.Context, repos []*gh.Repository, gists []*gh.Gist, username, lookupEmail string, user *gh.User, isOrg bool, userIdentifiers map[string]bool, cfg *github.Config) error {
+	updateChan := make(chan github.EmailUpdate, 100)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		display.StreamJSON(o.dataWriter, username, lookupEmail, user, isOrg, o.config.ShowTargetOnly, updateChan)
+	}()
+
+	emails := github.RateLimitedProcessRepos(ctx, o.pool, repos, o.config.CheckSecrets, cfg, userIdentifiers, o.config.ShowTargetOnly, updateChan)
+
+	if len(gists) > 0 && (o.config.CheckSecrets || cfg.ShowInteresting) {
+		gistEmails := github.ProcessGists(ctx, o.pool, gists, o.config.CheckSecrets, cfg)
+		for email, details := range gistEmails {
+			if existing, ok := emails[email]; ok {
+				for name := range details.Names {
+					existing.Names[name] = struct{}{}
+				}
+				for repoName, commits := range details.Commits {
+					existing.Commits[repoName] = append(existing.Commits[repoName], commits...)
+				}
+				existing.CommitCount += details.CommitCount
+			} else {
+				emails[email] = details
+				updateChan <- github.EmailUpdate{Email: email, Details: details}
+			}
+		}
+	}
+
+	externalEmails, err := github.FetchExternalContributions(ctx, o.pool, username, o.config.CheckSecrets, cfg)
+	if err == nil && len(externalEmails) > 0 {
+		for email, details := range externalEmails {
+			if existing, ok := emails[email]; ok {
+				for name := range details.Names {
+					existing.Names[name] = struct{}{}
+				}
+				for repoName, commits := range details.Commits {
+					existing.Commits[repoName] = append(existing.Commits[repoName], commits...)
+				}
+				existing.CommitCount += details.CommitCount
+			} else {
+				emails[email] = details
+				updateChan <- github.EmailUpdate{Email: email, Details: details}
+			}
+		}
+	}
+
+	close(updateChan)
+	wg.Wait()
 
 	return nil
 }
