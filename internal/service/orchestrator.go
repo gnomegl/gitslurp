@@ -12,6 +12,7 @@ import (
 	"github.com/gnomegl/gitslurp/internal/display"
 	"github.com/gnomegl/gitslurp/internal/github"
 	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/internal/spider"
 	gh "github.com/google/go-github/v57/github"
 )
 
@@ -32,6 +33,9 @@ func NewOrchestrator(pool *github.ClientPool, cfg *config.AppConfig, dataWriter 
 }
 
 func (o *Orchestrator) Run(ctx context.Context) error {
+	if o.config.SpiderMode {
+		return o.RunSpider(ctx)
+	}
 
 	username, lookupEmail, err := o.resolveTarget(ctx)
 	if err != nil {
@@ -358,6 +362,30 @@ func (o *Orchestrator) handleNoEmails(isOrg bool, username string, repoCount int
 		return fmt.Errorf("no repositories found for organization: %s", username)
 	}
 	return fmt.Errorf("no commits or gists found for user: %s", username)
+}
+
+func (o *Orchestrator) RunSpider(ctx context.Context) error {
+	username := o.config.Target
+	fmt.Println()
+	color.Blue("Target Username: %s", username)
+	fmt.Println()
+
+	spiderCfg := spider.SpiderConfig{
+		Depth:        o.config.SpiderDepth,
+		MaxNodes:     o.config.MaxNodes,
+		MinRepos:     o.config.MinRepos,
+		MinFollowers: o.config.MinFollowers,
+		MaxWorkers:   5 * o.pool.Size(),
+		OutputFile:   o.config.SpiderOutput,
+	}
+
+	s := spider.NewSpider(o.pool, spiderCfg)
+	if err := s.Run(ctx, username); err != nil {
+		return err
+	}
+
+	o.pool.DisplayPoolRateLimit(ctx)
+	return nil
 }
 
 func (o *Orchestrator) outputEventList(list []string, filename, header, emoji string) error {

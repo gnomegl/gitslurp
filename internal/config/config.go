@@ -18,6 +18,13 @@ type AppConfig struct {
 	TimestampAnalysis bool
 	IncludeForks      bool
 
+	SpiderMode   bool
+	SpiderDepth  int
+	MinRepos     int
+	MinFollowers int
+	MaxNodes     int
+	SpiderOutput string
+
 	OutputFormat string
 	Target       string
 
@@ -38,6 +45,11 @@ func findTarget() (string, error) {
 		"--token-file": true,
 		"-P": true, "--proxy": true,
 		"--proxy-file": true,
+		"--depth":          true,
+		"--min-repos":      true,
+		"--min-followers":  true,
+		"--max-nodes":      true,
+		"--spider-output":  true,
 	}
 
 	for i := 0; i < len(args); i++ {
@@ -94,6 +106,13 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		QuickMode:         c.Bool("quick"),
 		TimestampAnalysis: c.Bool("timestamp-analysis"),
 		IncludeForks:      c.Bool("include-forks"),
+
+		SpiderMode:   c.Bool("spider"),
+		SpiderDepth:  c.Int("depth"),
+		MinRepos:     c.Int("min-repos"),
+		MinFollowers: c.Int("min-followers"),
+		MaxNodes:     c.Int("max-nodes"),
+		SpiderOutput: c.String("spider-output"),
 
 		OutputFormat: outputFormat,
 		Target:       target,
