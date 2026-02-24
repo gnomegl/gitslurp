@@ -7,6 +7,9 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/gnomegl/gitslurp/internal/github"
+	gh "github.com/google/go-github/v57/github"
 )
 
 func outputJSON(w io.Writer, ctx *Context, matcher *UserMatcher) {
@@ -158,5 +161,69 @@ func outputCSV(w io.Writer, ctx *Context, matcher *UserMatcher) {
 				}
 			}
 		}
+	}
+}
+
+func StreamJSON(w io.Writer, knownUsername string, lookupEmail string, user *gh.User, isOrg bool, showTargetOnly bool, updateChan <-chan github.EmailUpdate) {
+	matcher := NewUserMatcher(knownUsername, lookupEmail, user)
+	encoder := json.NewEncoder(w)
+
+	meta := NDJSONMeta{
+		Target: knownUsername,
+		IsOrg:  isOrg,
+	}
+	if user != nil {
+		meta.User = &JSONUser{
+			Login:       user.GetLogin(),
+			Name:        user.GetName(),
+			Email:       user.GetEmail(),
+			Company:     user.GetCompany(),
+			Location:    user.GetLocation(),
+			Bio:         user.GetBio(),
+			Blog:        user.GetBlog(),
+			Twitter:     user.GetTwitterUsername(),
+			Followers:   user.GetFollowers(),
+			Following:   user.GetFollowing(),
+			PublicRepos: user.GetPublicRepos(),
+		}
+	}
+	encoder.Encode(meta)
+
+	for update := range updateChan {
+		isTarget := matcher.IsTargetUser(update.Email, update.Details)
+		if showTargetOnly && !isTarget {
+			continue
+		}
+
+		jsonEntry := JSONEmailEntry{
+			Email:        update.Email,
+			Names:        extractNames(update.Details),
+			CommitCount:  update.Details.CommitCount,
+			IsTarget:     isTarget,
+			Repositories: make([]JSONRepo, 0),
+		}
+
+		for repoName, commits := range update.Details.Commits {
+			jsonRepo := JSONRepo{
+				Name:    repoName,
+				Commits: make([]JSONCommit, 0),
+			}
+			for _, commit := range commits {
+				jsonRepo.Commits = append(jsonRepo.Commits, JSONCommit{
+					Hash:           commit.Hash,
+					URL:            commit.URL,
+					Message:        commit.Message,
+					AuthorName:     commit.AuthorName,
+					AuthorEmail:    commit.AuthorEmail,
+					AuthorDate:     commit.AuthorDate,
+					CommitterName:  commit.CommitterName,
+					CommitterEmail: commit.CommitterEmail,
+					Secrets:        commit.Secrets,
+				})
+			}
+			jsonEntry.Repositories = append(jsonEntry.Repositories, jsonRepo)
+		}
+
+		encoder.Encode(jsonEntry)
 	}
 }
