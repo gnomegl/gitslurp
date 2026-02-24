@@ -97,6 +97,32 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Name:  "proxy-file",
 				Usage: "Path to file with one proxy per line",
 			},
+			&cli.BoolFlag{
+				Name:  "spider",
+				Usage: "Build social graph by spidering a user's GitHub relationships",
+			},
+			&cli.IntFlag{
+				Name:  "depth",
+				Usage: "Spider depth - how many levels deep to crawl (1-5)",
+				Value: 1,
+			},
+			&cli.IntFlag{
+				Name:  "min-repos",
+				Usage: "Skip users with fewer than N public repos during spider",
+			},
+			&cli.IntFlag{
+				Name:  "min-followers",
+				Usage: "Skip users with fewer than N followers during spider",
+			},
+			&cli.IntFlag{
+				Name:  "max-nodes",
+				Usage: "Stop spidering after N total nodes in graph",
+				Value: 500,
+			},
+			&cli.StringFlag{
+				Name:  "spider-output",
+				Usage: "Output file path for spider graph (default: <username>_graph.gexf)",
+			},
 		},
 		Action:    action,
 		ArgsUsage: "<username|email>",
