@@ -3,11 +3,14 @@ package auth
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/gnomegl/gitslurp/internal/config"
 	"github.com/gnomegl/gitslurp/internal/github"
+	"github.com/gnomegl/gitslurp/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/urfave/cli/v2"
 )
@@ -68,6 +71,24 @@ func SetupClientPool(c *cli.Context, ctx context.Context, appConfig *config.AppC
 }
 
 func checkLatestVersion(ctx context.Context, client *gh.Client) {
-	// Version checking disabled for sr.ht - no equivalent API
-	// To check for updates manually: go install github.com/gnomegl/gitslurp@latest
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	local := utils.GetVersion()
+	if local == "unknown" || local == "(devel)" {
+		return
+	}
+
+	release, _, err := client.Repositories.GetLatestRelease(ctx, "gnomegl", "gitslurp")
+	if err != nil || release.TagName == nil {
+		return
+	}
+
+	remote := *release.TagName
+	if utils.IsNewer(remote, local) {
+		fmt.Fprintf(os.Stderr, "%s %s → %s — install with: go install github.com/gnomegl/gitslurp@latest\n",
+			color.YellowString("[*] Update available:"),
+			color.RedString("v%s", local),
+			color.GreenString("%s", strings.TrimPrefix(remote, "v")))
+	}
 }
