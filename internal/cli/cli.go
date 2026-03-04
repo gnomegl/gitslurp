@@ -11,8 +11,10 @@ const helpTemplate = `{{.Name}} - {{.Usage}}
 Usage: {{.HelpName}} [options] <username|email>
 
 Options:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}
+   {{range .VisibleFlagCategories}}{{if .Name}}
+{{.Name}}
+   {{end}}{{range .Flags}}{{.}}
+   {{end}}{{end}}
 `
 
 func NewApp(action cli.ActionFunc) *cli.App {
@@ -85,8 +87,9 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Usage:   "Include forked repositories in the scan (default: only owned repos)",
 			},
 			&cli.StringFlag{
-				Name:  "token-file",
-				Usage: "Path to file with one GitHub token per line",
+				Name:     "token-file",
+				Usage:    "Path to file with one GitHub token per line",
+				Category: "Spidering:",
 			},
 			&cli.StringFlag{
 				Name:    "proxy",
@@ -94,34 +97,41 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Usage:   "Proxy URL (user:pass@host:port)",
 			},
 			&cli.StringFlag{
-				Name:  "proxy-file",
-				Usage: "Path to file with one proxy per line",
+				Name:     "proxy-file",
+				Usage:    "Path to file with one proxy per line",
+				Category: "Spidering:",
 			},
 			&cli.BoolFlag{
-				Name:  "spider",
-				Usage: "Build social graph by spidering a user's GitHub relationships",
+				Name:     "spider",
+				Usage:    "Build social graph by spidering a user's GitHub relationships",
+				Category: "Spidering:",
 			},
 			&cli.IntFlag{
-				Name:  "depth",
-				Usage: "Spider depth - how many levels deep to crawl",
-				Value: 1,
+				Name:     "depth",
+				Usage:    "Spider depth - how many levels deep to crawl",
+				Value:    1,
+				Category: "Spidering:",
 			},
 			&cli.IntFlag{
-				Name:  "min-repos",
-				Usage: "Skip users with fewer than N public repos during spider",
+				Name:     "min-repos",
+				Usage:    "Skip users with fewer than N public repos during spider",
+				Category: "Spidering:",
 			},
 			&cli.IntFlag{
-				Name:  "min-followers",
-				Usage: "Skip users with fewer than N followers during spider",
+				Name:     "min-followers",
+				Usage:    "Skip users with fewer than N followers during spider",
+				Category: "Spidering:",
 			},
 			&cli.IntFlag{
-				Name:  "max-nodes",
-				Usage: "Stop spidering after N total nodes in graph",
-				Value: 500,
+				Name:     "max-nodes",
+				Usage:    "Stop spidering after N total nodes in graph",
+				Value:    500,
+				Category: "Spidering:",
 			},
 			&cli.StringFlag{
-				Name:  "spider-output",
-				Usage: "Output file path for spider graph (default: <username>_graph.gexf)",
+				Name:     "spider-output",
+				Usage:    "Output file path for spider graph (default: <username>_graph.gexf)",
+				Category: "Spidering:",
 			},
 		},
 		Action:    action,
