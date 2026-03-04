@@ -8,11 +8,11 @@ import (
 	"sync"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/config"
-	"github.com/gnomegl/gitslurp/internal/display"
-	"github.com/gnomegl/gitslurp/internal/github"
-	"github.com/gnomegl/gitslurp/internal/models"
-	"github.com/gnomegl/gitslurp/internal/spider"
+	"github.com/gnomegl/gitslurp/v2/internal/config"
+	"github.com/gnomegl/gitslurp/v2/internal/display"
+	"github.com/gnomegl/gitslurp/v2/internal/github"
+	"github.com/gnomegl/gitslurp/v2/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/spider"
 	gh "github.com/google/go-github/v57/github"
 )
 

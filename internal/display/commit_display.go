@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/models"
 )
 
 type CommitDisplayer struct {

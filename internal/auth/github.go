@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/config"
-	"github.com/gnomegl/gitslurp/internal/github"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"github.com/gnomegl/gitslurp/v2/internal/config"
+	"github.com/gnomegl/gitslurp/v2/internal/github"
+	"github.com/gnomegl/gitslurp/v2/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/urfave/cli/v2"
 )
@@ -86,7 +86,7 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 
 	remote := *release.TagName
 	if utils.IsNewer(remote, local) {
-		fmt.Fprintf(os.Stderr, "%s %s → %s — install with: go install github.com/gnomegl/gitslurp@latest\n",
+		fmt.Fprintf(os.Stderr, "%s %s → %s — install with: go install github.com/gnomegl/gitslurp/v2@latest\n",
 			color.YellowString("[*] Update available:"),
 			color.RedString("v%s", local),
 			color.GreenString("%s", strings.TrimPrefix(remote, "v")))
