@@ -1,4 +1,4 @@
-module github.com/gnomegl/gitslurp
+module github.com/gnomegl/gitslurp/v2
 
 go 1.22
 

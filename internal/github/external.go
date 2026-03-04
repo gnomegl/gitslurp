@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gnomegl/gitslurp/internal/models"
-	"github.com/gnomegl/gitslurp/internal/scanner"
+	"github.com/gnomegl/gitslurp/v2/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/scanner"
 	gh "github.com/google/go-github/v57/github"
 )
 

@@ -3,7 +3,7 @@ package utils
 import (
 	"time"
 
-	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/models"
 )
 
 func AnalyzeTimestamp(commitTime time.Time) *models.TimestampAnalysis {
