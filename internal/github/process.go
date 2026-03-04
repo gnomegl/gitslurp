@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gnomegl/gitslurp/internal/models"
-	"github.com/gnomegl/gitslurp/internal/scanner"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"github.com/gnomegl/gitslurp/v2/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/scanner"
+	"github.com/gnomegl/gitslurp/v2/internal/utils"
 	gh "github.com/google/go-github/v57/github"
 	"github.com/schollz/progressbar/v3"
 	"slices"

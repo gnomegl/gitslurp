@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/auth"
-	cliPkg "github.com/gnomegl/gitslurp/internal/cli"
-	"github.com/gnomegl/gitslurp/internal/config"
-	"github.com/gnomegl/gitslurp/internal/service"
+	"github.com/gnomegl/gitslurp/v2/internal/auth"
+	cliPkg "github.com/gnomegl/gitslurp/v2/internal/cli"
+	"github.com/gnomegl/gitslurp/v2/internal/config"
+	"github.com/gnomegl/gitslurp/v2/internal/service"
 	"github.com/urfave/cli/v2"
 )
 

@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"github.com/gnomegl/gitslurp/internal/art"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"github.com/gnomegl/gitslurp/v2/internal/art"
+	"github.com/gnomegl/gitslurp/v2/internal/utils"
 	"github.com/urfave/cli/v2"
 )
 

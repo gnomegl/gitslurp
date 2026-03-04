@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/github"
+	"github.com/gnomegl/gitslurp/v2/internal/github"
 	"github.com/schollz/progressbar/v3"
 )
 

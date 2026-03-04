@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/models"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"github.com/gnomegl/gitslurp/v2/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/utils"
 )
 
 func displayTimestampAnalysis(emails map[string]*models.EmailDetails, userIdentifiers map[string]bool) {

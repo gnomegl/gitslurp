@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/common-nighthawk/go-figure"
-	"github.com/gnomegl/gitslurp/internal/utils"
+	"github.com/gnomegl/gitslurp/v2/internal/utils"
 )
 
 func PrintLogo() {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gnomegl/gitslurp/internal/github"
+	"github.com/gnomegl/gitslurp/v2/internal/github"
 	gh "github.com/google/go-github/v57/github"
 )
 

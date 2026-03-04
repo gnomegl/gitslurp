@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/gnomegl/gitslurp/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/models"
 )
 
 func displayRepositoryStats(emails map[string]*models.EmailDetails, userIdentifiers map[string]bool) {
