@@ -103,7 +103,7 @@ func NewApp(action cli.ActionFunc) *cli.App {
 			},
 			&cli.IntFlag{
 				Name:  "depth",
-				Usage: "Spider depth - how many levels deep to crawl (1-5)",
+				Usage: "Spider depth - how many levels deep to crawl",
 				Value: 1,
 			},
 			&cli.IntFlag{
