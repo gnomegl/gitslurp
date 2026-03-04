@@ -40,9 +40,6 @@ func NewSpider(pool *github.ClientPool, cfg SpiderConfig) *Spider {
 	if cfg.Depth <= 0 {
 		cfg.Depth = 1
 	}
-	if cfg.Depth > 5 {
-		cfg.Depth = 5
-	}
 
 	return &Spider{
 		pool:   pool,
