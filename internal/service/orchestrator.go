@@ -12,6 +12,7 @@ import (
 	"github.com/gnomegl/gitslurp/v2/internal/display"
 	"github.com/gnomegl/gitslurp/v2/internal/github"
 	"github.com/gnomegl/gitslurp/v2/internal/models"
+	"github.com/gnomegl/gitslurp/v2/internal/platform"
 	"github.com/gnomegl/gitslurp/v2/internal/spider"
 	"github.com/gnomegl/gitslurp/v2/internal/trufflehog"
 	gh "github.com/google/go-github/v57/github"
@@ -25,10 +26,14 @@ type Orchestrator struct {
 }
 
 func NewOrchestrator(pool *github.ClientPool, cfg *config.AppConfig, dataWriter *os.File) *Orchestrator {
+	var token string
+	if pool != nil {
+		token = pool.PrimaryToken()
+	}
 	return &Orchestrator{
 		pool:       pool,
 		config:     cfg,
-		token:      pool.PrimaryToken(),
+		token:      token,
 		dataWriter: dataWriter,
 	}
 }
@@ -36,6 +41,11 @@ func NewOrchestrator(pool *github.ClientPool, cfg *config.AppConfig, dataWriter 
 func (o *Orchestrator) Run(ctx context.Context) error {
 	if o.config.SpiderMode {
 		return o.RunSpider(ctx)
+	}
+
+	plat := strings.ToLower(o.config.Platform)
+	if plat == "gitlab" || plat == "codeberg" {
+		return o.RunMultiPlatform(ctx, plat)
 	}
 
 	username, lookupEmail, err := o.resolveTarget(ctx)
@@ -411,6 +421,106 @@ func (o *Orchestrator) maybeRunTrufflehogWithEmails(ctx context.Context, usernam
 	runner := trufflehog.NewRunner(o.pool, scope)
 	runner.SetDiscoveredUsers(discoveredLogins)
 	return runner.Run(ctx, username, isOrg)
+}
+
+func (o *Orchestrator) RunMultiPlatform(ctx context.Context, plat string) error {
+	var provider platform.Provider
+	token := o.config.Token
+	if strings.HasPrefix(token, "ghp_") || strings.HasPrefix(token, "gho_") || strings.HasPrefix(token, "github_pat_") {
+		token = ""
+	}
+
+	switch plat {
+	case "gitlab":
+		if token == "" {
+			token = os.Getenv("GITSLURP_GITLAB_TOKEN")
+		}
+		if token == "" {
+			token = os.Getenv("GITLAB_TOKEN")
+		}
+		provider = platform.NewGitLabProvider(token)
+	case "codeberg":
+		if token == "" {
+			token = os.Getenv("GITSLURP_CODEBERG_TOKEN")
+		}
+		provider = platform.NewCodebergProvider(token)
+	default:
+		return fmt.Errorf("unsupported platform: %s", plat)
+	}
+
+	username := o.config.Target
+	fmt.Println()
+	color.Blue("Target: %s (%s)", username, provider.Name())
+
+	isOrg, err := provider.IsOrganization(ctx, username)
+	if err != nil {
+		color.Yellow("[!] Could not check organization status: %v", err)
+	}
+
+	if isOrg {
+		color.Green("[+] Organization account detected")
+	} else {
+		color.Green("[+] User account detected")
+	}
+
+	var userInfo *platform.UserInfo
+	if !isOrg {
+		userInfo, err = provider.GetUser(ctx, username)
+		if err != nil {
+			color.Yellow("[!] Could not fetch user profile: %v", err)
+		}
+	}
+
+	cfg := platform.ScanConfig{
+		CheckSecrets:      o.config.CheckSecrets,
+		ShowInteresting:   o.config.ShowInteresting,
+		QuickMode:         o.config.QuickMode,
+		TimestampAnalysis: o.config.TimestampAnalysis,
+		IncludeForks:      o.config.IncludeForks,
+		SkipNodeModules:   true,
+		PerPage:           100,
+		MaxConcurrent:     5,
+	}
+
+	runner := platform.NewRunner(provider, cfg)
+
+	if userInfo != nil {
+		runner.DisplayUserInfo(userInfo, isOrg)
+	}
+
+	if o.config.ProfileOnly {
+		return nil
+	}
+
+	emails, err := runner.FetchAndProcessRepos(ctx, username, isOrg)
+	if err != nil {
+		return err
+	}
+
+	if len(emails) == 0 {
+		color.Yellow("\n[!] No emails found in commit history")
+		return nil
+	}
+
+	var ghUser *gh.User
+	if userInfo != nil {
+		ghUser = &gh.User{}
+		login := userInfo.Login
+		name := userInfo.Name
+		email := userInfo.Email
+		ghUser.Login = &login
+		ghUser.Name = &name
+		ghUser.Email = &email
+	}
+
+	ghCfg := github.DefaultConfig()
+	ghCfg.ShowInteresting = o.config.ShowInteresting
+	ghCfg.TimestampAnalysis = o.config.TimestampAnalysis
+
+	display.Results(emails, o.config.ShowDetails, o.config.CheckSecrets,
+		"", username, ghUser, o.config.ShowTargetOnly, isOrg, &ghCfg, o.config.OutputFormat, o.dataWriter)
+
+	return nil
 }
 
 func (o *Orchestrator) RunSpider(ctx context.Context) error {
