@@ -7,6 +7,7 @@ type CommitInfo struct {
 	URL               string
 	AuthorName        string
 	AuthorEmail       string
+	AuthorLogin       string // GitHub username from API (not git author)
 	AuthorDate        time.Time
 	CommitterName     string
 	CommitterEmail    string

@@ -19,6 +19,11 @@ import (
 func ProcessCommit(commit *gh.RepositoryCommit, checkSecrets bool, cfg *Config) models.CommitInfo {
 	var info models.CommitInfo
 
+	// Capture GitHub login from the API user object (distinct from git commit author)
+	if commit.GetAuthor() != nil {
+		info.AuthorLogin = commit.GetAuthor().GetLogin()
+	}
+
 	if commit.Commit != nil {
 		info.Message = commit.Commit.GetMessage()
 		info.Hash = commit.GetSHA()
