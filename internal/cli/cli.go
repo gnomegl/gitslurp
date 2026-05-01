@@ -37,10 +37,10 @@ func NewApp(action cli.ActionFunc) *cli.App {
 				Aliases: []string{"d"},
 				Usage:   "Show detailed commit information",
 			},
-			&cli.BoolFlag{
+			&cli.StringFlag{
 				Name:    "secrets",
 				Aliases: []string{"s"},
-				Usage:   "Enable scanning for secrets in commits",
+				Usage:   "Run trufflehog secret scanner. Scopes: target,members,followers,following,stargazers (default: target)",
 			},
 			&cli.BoolFlag{
 				Name:    "interesting",

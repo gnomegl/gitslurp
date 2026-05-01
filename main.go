@@ -32,6 +32,8 @@ func hasStructuredOutputFlag() bool {
 }
 
 func main() {
+	config.NormalizeArgs()
+
 	realStdout := os.Stdout
 	realStderr := os.Stderr
 

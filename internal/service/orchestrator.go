@@ -13,6 +13,7 @@ import (
 	"github.com/gnomegl/gitslurp/v2/internal/github"
 	"github.com/gnomegl/gitslurp/v2/internal/models"
 	"github.com/gnomegl/gitslurp/v2/internal/spider"
+	"github.com/gnomegl/gitslurp/v2/internal/trufflehog"
 	gh "github.com/google/go-github/v57/github"
 )
 
@@ -55,7 +56,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	display.UserInfo(user, isOrg)
 
 	if o.config.ProfileOnly {
-		return nil
+		return o.maybeRunTrufflehog(ctx, username, isOrg)
 	}
 
 	cfg := github.DefaultConfig()
@@ -66,6 +67,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 	repos, gists, err := o.fetchReposAndGists(ctx, username, isOrg, &cfg, user)
 	if err != nil {
+		// If repo fetch fails but we have trufflehog to run, still try it
+		if o.config.SecretsScope != "" {
+			return o.maybeRunTrufflehog(ctx, username, isOrg)
+		}
 		return err
 	}
 
@@ -79,7 +84,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	userIdentifiers := o.buildUserIdentifiers(username, lookupEmail, user)
 
 	if o.config.OutputFormat == "json" {
-		return o.runStreamingJSON(ctx, repos, gists, username, lookupEmail, user, isOrg, userIdentifiers, &cfg)
+		if err := o.runStreamingJSON(ctx, repos, gists, username, lookupEmail, user, isOrg, userIdentifiers, &cfg); err != nil {
+			return err
+		}
+		return o.maybeRunTrufflehog(ctx, username, isOrg)
 	}
 
 	emails := github.RateLimitedProcessRepos(ctx, o.pool, repos, o.config.CheckSecrets, &cfg, userIdentifiers, o.config.ShowTargetOnly, nil)
@@ -106,14 +114,20 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 
 	if len(emails) == 0 {
-		return o.handleNoEmails(isOrg, username, len(repos))
+		if err := o.handleNoEmails(isOrg, username, len(repos)); err != nil {
+			// Still try trufflehog even if no emails found
+			if o.config.SecretsScope != "" {
+				return o.maybeRunTrufflehog(ctx, username, isOrg)
+			}
+			return err
+		}
 	}
 
 	display.Results(emails, o.config.ShowDetails, o.config.CheckSecrets, lookupEmail, username, user, o.config.ShowTargetOnly, isOrg, &cfg, o.config.OutputFormat, o.dataWriter)
 
 	o.pool.DisplayPoolRateLimit(ctx)
 
-	return nil
+	return o.maybeRunTrufflehogWithEmails(ctx, username, isOrg, emails)
 }
 
 func (o *Orchestrator) runStreamingJSON(ctx context.Context, repos []*gh.Repository, gists []*gh.Gist, username, lookupEmail string, user *gh.User, isOrg bool, userIdentifiers map[string]bool, cfg *github.Config) error {
@@ -362,6 +376,41 @@ func (o *Orchestrator) handleNoEmails(isOrg bool, username string, repoCount int
 		return fmt.Errorf("no repositories found for organization: %s", username)
 	}
 	return fmt.Errorf("no commits or gists found for user: %s", username)
+}
+
+func (o *Orchestrator) maybeRunTrufflehog(ctx context.Context, username string, isOrg bool) error {
+	return o.maybeRunTrufflehogWithEmails(ctx, username, isOrg, nil)
+}
+
+func (o *Orchestrator) maybeRunTrufflehogWithEmails(ctx context.Context, username string, isOrg bool, emails map[string]*models.EmailDetails) error {
+	if o.config.SecretsScope == "" {
+		return nil
+	}
+
+	scope, err := trufflehog.ParseScanScope(o.config.SecretsScope)
+	if err != nil {
+		return err
+	}
+
+	// Extract discovered GitHub logins from commit data
+	var discoveredLogins []string
+	if emails != nil {
+		seen := make(map[string]bool)
+		for _, details := range emails {
+			for _, repoCommits := range details.Commits {
+				for _, commit := range repoCommits {
+					if commit.AuthorLogin != "" && !seen[commit.AuthorLogin] {
+						seen[commit.AuthorLogin] = true
+						discoveredLogins = append(discoveredLogins, commit.AuthorLogin)
+					}
+				}
+			}
+		}
+	}
+
+	runner := trufflehog.NewRunner(o.pool, scope)
+	runner.SetDiscoveredUsers(discoveredLogins)
+	return runner.Run(ctx, username, isOrg)
 }
 
 func (o *Orchestrator) RunSpider(ctx context.Context) error {

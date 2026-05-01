@@ -9,6 +9,7 @@ import (
 type AppConfig struct {
 	ShowDetails       bool
 	CheckSecrets      bool
+	SecretsScope      string
 	ShowTargetOnly    bool
 	ShowInteresting   bool
 	ProfileOnly       bool
@@ -33,13 +34,60 @@ type AppConfig struct {
 	ProxyFile string
 }
 
+// valid scopes for --secrets flag
+var validSecretsScopes = map[string]bool{
+	"target": true, "members": true, "followers": true,
+	"following": true, "stargazers": true,
+}
+
+// isSecretsScope checks if a value looks like a valid --secrets scope argument
+// (as opposed to a username that got consumed as the flag value)
+func isSecretsScope(val string) bool {
+	for _, part := range strings.Split(val, ",") {
+		if !validSecretsScopes[strings.TrimSpace(strings.ToLower(part))] {
+			return false
+		}
+	}
+	return true
+}
+
+// NormalizeArgs preprocesses os.Args to handle -s/--secrets with optional value.
+// If -s is followed by a non-scope argument (i.e. a username), we insert "target"
+// as the default value so the username isn't consumed as the flag value.
+// Must be called before cli.App.Run.
+func NormalizeArgs() {
+	args := os.Args
+	var normalized []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		normalized = append(normalized, arg)
+
+		if arg == "-s" || arg == "--secrets" {
+			// Check if next arg exists and is a valid scope
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				if isSecretsScope(args[i+1]) {
+					// Next arg is a valid scope, let cli consume it normally
+					continue
+				}
+				// Next arg is not a scope (probably a username), insert default
+				normalized = append(normalized, "target")
+			} else {
+				// -s is the last arg or next is another flag, insert default
+				normalized = append(normalized, "target")
+			}
+		}
+	}
+
+	os.Args = normalized
+}
+
 // extracts the username/email from command line args, ignoring flags
 func findTarget() (string, error) {
 	args := os.Args[1:]
 	var targets []string
 
 	// known flags that take values
-	// TODO: enumerate the flags for this
 	flagsWithValues := map[string]bool{
 		"-t": true, "--token": true,
 		"--token-file": true,
@@ -50,6 +98,7 @@ func findTarget() (string, error) {
 		"--min-followers":  true,
 		"--max-nodes":      true,
 		"--spider-output":  true,
+		"-s": true, "--secrets": true,
 	}
 
 	for i := 0; i < len(args); i++ {
@@ -95,9 +144,17 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 		outputFormat = "csv"
 	}
 
+	secretsVal := c.String("secrets")
+	// If the flag is present but has no value, cli sets it to the string "true" for BoolFlag migration.
+	// But since we changed to StringFlag, we need to handle when user passes -s with no arg.
+	// urfave/cli will require a value for StringFlag, so -s alone won't work.
+	// We handle this in findTarget by checking if "secrets" appears as a bare flag.
+	checkSecrets := secretsVal != ""
+
 	return &AppConfig{
 		ShowDetails:       c.Bool("details"),
-		CheckSecrets:      c.Bool("secrets"),
+		CheckSecrets:      checkSecrets,
+		SecretsScope:      secretsVal,
 		ShowTargetOnly:    false,
 		ShowInteresting:   c.Bool("interesting"),
 		ProfileOnly:       c.Bool("profile-only"),
