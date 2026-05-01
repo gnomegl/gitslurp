@@ -56,6 +56,12 @@ func main() {
 		}
 
 		ctx := c.Context
+		plat := strings.ToLower(appConfig.Platform)
+		if plat == "gitlab" || plat == "codeberg" {
+			orchestrator := service.NewOrchestrator(nil, appConfig, realStdout)
+			return orchestrator.Run(ctx)
+		}
+
 		pool, err := auth.SetupClientPool(c, ctx, appConfig)
 		if err != nil {
 			return err

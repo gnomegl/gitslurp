@@ -23,14 +23,20 @@ func NewApp(action cli.ActionFunc) *cli.App {
 
 	return &cli.App{
 		Name:    "gitslurp",
-		Usage:   "OSINT tool to analyze GitHub user's recent activity and commit history",
+		Usage:   "OSINT tool to analyze GitHub/GitLab/Codeberg user's activity and commit history",
 		Version: "v" + utils.GetVersion(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
+				Name:    "platform",
+				Usage:   "Platform to scan: github, gitlab, codeberg (default: github)",
+				Value:   "github",
+				EnvVars: []string{"GITSLURP_PLATFORM"},
+			},
+			&cli.StringFlag{
 				Name:    "token",
 				Aliases: []string{"t"},
-				Usage:   "GitHub personal access token",
-				EnvVars: []string{"GITSLURP_GITHUB_TOKEN"},
+				Usage:   "API access token (GitHub/GitLab/Codeberg)",
+				EnvVars: []string{"GITSLURP_GITHUB_TOKEN", "GITSLURP_TOKEN"},
 			},
 			&cli.BoolFlag{
 				Name:    "details",
@@ -136,6 +142,7 @@ func NewApp(action cli.ActionFunc) *cli.App {
 		},
 		Action:    action,
 		ArgsUsage: "<username|email>",
+		UsageText: "gitslurp [options] <username|email>\n\n   Platform examples:\n     gitslurp torvalds                          # GitHub (default)\n     gitslurp --platform gitlab torvalds         # GitLab\n     gitslurp --platform codeberg wiktor         # Codeberg",
 		Authors: []*cli.Author{
 			{Name: "gnomegl"},
 		},

@@ -1,9 +1,11 @@
 package config
 
 import (
-	"github.com/urfave/cli/v2"
+	"fmt"
 	"os"
 	"strings"
+
+	"github.com/urfave/cli/v2"
 )
 
 type AppConfig struct {
@@ -28,6 +30,8 @@ type AppConfig struct {
 
 	OutputFormat string
 	Target       string
+	Platform     string
+	Token        string
 
 	TokenFile string
 	Proxy     string
@@ -98,6 +102,7 @@ func findTarget() (string, error) {
 		"--min-followers":  true,
 		"--max-nodes":      true,
 		"--spider-output":  true,
+		"--platform":       true,
 		"-s": true, "--secrets": true,
 	}
 
@@ -151,6 +156,13 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 	// We handle this in findTarget by checking if "secrets" appears as a bare flag.
 	checkSecrets := secretsVal != ""
 
+	platformVal := c.String("platform")
+	switch strings.ToLower(platformVal) {
+	case "github", "gitlab", "codeberg", "":
+	default:
+		return nil, fmt.Errorf("unsupported platform: %q (valid: github, gitlab, codeberg)", platformVal)
+	}
+
 	return &AppConfig{
 		ShowDetails:       c.Bool("details"),
 		CheckSecrets:      checkSecrets,
@@ -173,6 +185,9 @@ func ParseConfig(c *cli.Context) (*AppConfig, error) {
 
 		OutputFormat: outputFormat,
 		Target:       target,
+
+		Platform:  c.String("platform"),
+		Token:     c.String("token"),
 
 		TokenFile: c.String("token-file"),
 		Proxy:     c.String("proxy"),
