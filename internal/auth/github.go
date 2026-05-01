@@ -86,9 +86,14 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 
 	remote := *release.TagName
 	if utils.IsNewer(remote, local) {
-		fmt.Fprintf(os.Stderr, "%s %s → %s — install with: go install github.com/gnomegl/gitslurp/v2@latest\n",
+		installPath := "github.com/gnomegl/gitslurp"
+		if maj, _, _, err := utils.ParseVersion(remote); err == nil && maj >= 2 {
+			installPath = fmt.Sprintf("%s/v%d", installPath, maj)
+		}
+		fmt.Fprintf(os.Stderr, "%s %s → %s — install with: go install %s@latest\n",
 			color.YellowString("[*] Update available:"),
 			color.RedString("v%s", local),
-			color.GreenString("%s", strings.TrimPrefix(remote, "v")))
+			color.GreenString("%s", strings.TrimPrefix(remote, "v")),
+			installPath)
 	}
 }
