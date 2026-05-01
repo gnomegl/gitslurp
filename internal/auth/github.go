@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -90,10 +92,27 @@ func checkLatestVersion(ctx context.Context, client *gh.Client) {
 		if maj, _, _, err := utils.ParseVersion(remote); err == nil && maj >= 2 {
 			installPath = fmt.Sprintf("%s/v%d", installPath, maj)
 		}
-		fmt.Fprintf(os.Stderr, "%s %s → %s — install with: go install %s@latest\n",
+		fmt.Fprintf(os.Stderr, "%s %s → %s\n",
 			color.YellowString("[*] Update available:"),
 			color.RedString("v%s", local),
-			color.GreenString("%s", strings.TrimPrefix(remote, "v")),
-			installPath)
+			color.GreenString("%s", strings.TrimPrefix(remote, "v")))
+		fmt.Fprintf(os.Stderr, "%s", color.YellowString("    Update now? [Y/n] "))
+
+		reader := bufio.NewReader(os.Stdin)
+		answer, _ := reader.ReadString('\n')
+		answer = strings.TrimSpace(strings.ToLower(answer))
+
+		if answer == "" || answer == "y" || answer == "yes" {
+			fmt.Fprintf(os.Stderr, "%s\n", color.CyanString("[*] Running: go install %s@latest", installPath))
+			cmd := exec.Command("go", "install", installPath+"@latest")
+			cmd.Stdout = os.Stderr
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "%s %v\n", color.RedString("[!] Update failed:"), err)
+			} else {
+				fmt.Fprintf(os.Stderr, "%s Please re-run your command.\n", color.GreenString("[✓] Updated to %s.", strings.TrimPrefix(remote, "v")))
+				os.Exit(0)
+			}
+		}
 	}
 }
